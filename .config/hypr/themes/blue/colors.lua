@@ -1,0 +1,4 @@
+return {
+    active_border   = "rgba(33ccffee)", --rgba(00ff99ee) 45deg
+    inactive_border = "rgba(595959aa)"
+}

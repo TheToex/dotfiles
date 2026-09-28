@@ -11,7 +11,7 @@ ln -sf "$HOME/.config/hypr/themes/purple/hypr/hyprlock/hyprlock.conf" "$HOME/.co
 awww img --transition-type grow --transition-duration 1 --transition-fps 60 ~/.config/hypr/themes/purple/wall.jpg
 
 # waybar
-pkill waybar
+killall -9 waybar
 waybar -c "$THEME_DIR/waybar/waybar.jsonc" \
        -s "$THEME_DIR/waybar/waybar.css" &
 

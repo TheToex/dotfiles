@@ -2,7 +2,7 @@ local mainMod = "SUPER"
 
 local terminal = "kitty"
 local fileManager = "thunar"
-local menu = "rofi -show drun"
+local menu = "rofi -show drun -config ~/.config/hypr/themes/current/rofi/config.rasi"
 
 -- ===================
 -- === KEYBINDINGS ===

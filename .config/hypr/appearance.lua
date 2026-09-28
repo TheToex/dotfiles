@@ -1,21 +1,12 @@
--- فراخوانی فایل رنگ‌ها
--- در Lua به جای `source` از `require` (اگر فایل Lua باشد) یا متدهای خواندن متغیر استفاده می‌کنیم.
--- اما چون این بخش به فایل `.conf` اشاره دارد، بهترین راه استفاده از دستور `source` داخل hl.config است.
 hl.config({
-    source = {
-        "~/.config/hypr/themes/current/colors.conf"
-    },
     general = {
         gaps_in  = 4,
         gaps_out = 8,
 
         border_size = 2,
 
-        -- رنگ‌ها از فایل colors.conf فراخوانی می‌شوند، اما این حالت پیش‌فرض است:
-        -- col = {
-        --     active_border   = "rgba(ffffffff)",
-        --     inactive_border = "rgba(595959aa)",
-        -- },
+        --colors
+        col = require("~/.config/hypr/themes/current/colors.lua"),
 
         resize_on_border = false,
         allow_tearing    = false,
