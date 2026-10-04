@@ -1,0 +1,313 @@
+$bg: rgba(30, 30, 46, 0.85);
+$fg: #cdd6f4;
+$accent: #cba6f7;
+$border: rgba(203, 166, 247, 0.4);
+$hover: rgba(203, 166, 247, 0.2);
+
+* {
+  all: unset;
+  font-family: "JetBrainsMono Nerd Font", "Ubuntu Nerd Font", sans-serif;
+  color: $fg;
+}
+
+window.Bar {
+  background: transparent;
+  
+  > centerbox {
+    background: transparent;
+    border: none;
+    margin: 5px 4px 0px 4px;
+    padding: 0;
+  }
+
+  .pill {
+    background: $bg;
+    border: 1px solid $border;
+    border-radius: 12px;
+    padding: 0 12px;
+    margin: 2px;
+    min-height: 30px; /* Uniform height for all items */
+    transition: background-color 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+    &.active {
+      background-color: #89dceb;
+      label, image {
+        color: #11111b;
+      }
+      
+      &.state-power-saver { background-color: #00a849; }
+      &.state-balanced { background-color: #89dceb; }
+      &.state-performance { background-color: #e8291c; }
+    }
+  }
+
+  .pill.power {
+    background: rgba(243, 139, 168, 0.2);
+    border-color: rgba(243, 139, 168, 0.4);
+  }
+
+  .logo-workspaces {
+    background: $bg;
+    border: 1px solid $border;
+    padding: 0 4px;
+    margin: 2px;
+    border-radius: 12px;
+    min-height: 30px; /* Match the pill height */
+  }
+
+  .clock {
+    font-weight: 900;
+    margin: 0;
+  }
+
+  .workspaces button {
+    border-radius: 8px;
+    min-width: 20px;
+    min-height: 20px;
+    margin: 2px;
+    padding: 0;
+    transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    background: rgba(255, 255, 255, 0.1);
+    
+    label, image { 
+      font-size: 0.9em; 
+      margin: 0;
+    }
+    
+    &.focused {
+      background: #89dceb;
+      border: none;
+      min-width: 28px;
+      border-radius: 8px;
+      
+      label, image {
+        color: #11111b;
+      }
+    }
+  }
+
+  button.arch-logo {
+    border-radius: 8px;
+    padding: 2px 6px;
+    margin-right: 2px;
+  }
+
+  button {
+    border-radius: 8px;
+    padding: 2px 8px;
+    margin: 2px;
+    transition: background 0.2s;
+    font-weight: bold;
+  }
+}
+
+window.Dock {
+  background: transparent;
+
+  > box {
+    background: $bg;
+    border: 1px solid $border;
+    border-radius: 16px;
+    margin-bottom: 10px;
+    padding: 6px;
+  }
+
+  button {
+    border-radius: 12px;
+    padding: 8px 12px;
+    margin: 0 4px;
+    transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    
+    &:hover {
+      background: $accent;
+    }
+    
+    image { font-size: 24px; }
+  }
+
+  .running-app {
+    border-bottom: 2px solid $accent;
+  }
+
+  .separator {
+    opacity: 0.3;
+    margin: 0 4px;
+  }
+
+  .pin-icon {
+    font-size: 1.5em;
+    opacity: 0.5;
+  }
+}
+
+window.Launcher, window.NotificationCenter, window.AudioMenu, window.WifiMenu, window.BluetoothMenu, window.PowerMenu, window.BatteryMenu {
+  background: transparent;
+  
+  .box {
+    background: $bg;
+    border: 1px solid $border;
+    border-radius: 16px;
+    padding: 16px;
+    margin: 12px;
+  }
+
+  entry {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid $border;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    color: $fg;
+  }
+
+  button {
+    border-radius: 8px;
+    padding: 8px;
+    margin: 2px 0;
+    
+    &:hover, &:focus, &.selected { 
+      background: $hover; 
+      outline: none;
+    }
+  }
+}
+
+scale {
+  padding: 0;
+  margin: 0 8px;
+  
+  trough {
+    background: rgba(255,255,255,0.1);
+    border-radius: 8px;
+    min-height: 6px;
+  }
+  
+  highlight {
+    background: $accent;
+    border-radius: 8px;
+  }
+  
+  slider {
+    background: $fg;
+    border-radius: 50%;
+    min-width: 12px;
+    min-height: 12px;
+    margin: -3px 0;
+    border: 1px solid $border;
+  }
+}
+
+.notification-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-left: 3px solid $accent;
+  
+  .title {
+    font-weight: bold;
+    font-size: 1.1em;
+  }
+  .body {
+    opacity: 0.8;
+  }
+}
+
+.wifi-connected-lbl {
+  color: #a6e3a1;
+  font-weight: bold;
+  font-size: 0.9em;
+}
+
+.wifi-disconnect-lbl {
+  color: #f38ba8;
+  font-weight: bold;
+  font-size: 0.9em;
+}
+
+.wifi-active-btn {
+  background: rgba(166, 227, 161, 0.1); 
+  border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.wifi-connect-lbl {
+  font-size: 0.9em;
+}
+
+.wifi-empty-lbl {
+  opacity: 0.5; 
+  padding: 20px;
+}
+
+.wifi-icon-lbl {
+  font-size: 1.5em; 
+  font-weight: 900; 
+  color: #89b4fa; 
+  margin-right: 8px;
+}
+
+window.Launcher .box {
+  background: rgba(30, 30, 46, 0.95);
+}
+
+window.Bar .power-pill {
+  background: $bg;
+  border: 1px solid $border;
+  border-radius: 12px;
+  margin: 2px;
+  min-height: 30px;
+  min-width: 36px;
+  padding: 0;
+  transition: background 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  
+  &.active {
+    background: #e03131;
+    label, image {
+      color: #11111b;
+    }
+  }
+}
+
+@keyframes blink-red {
+  0% { background: rgba(243, 139, 168, 0.2); border-color: rgba(243, 139, 168, 0.4); }
+  50% { background: rgba(243, 139, 168, 0.6); border-color: rgba(243, 139, 168, 0.8); }
+  100% { background: rgba(243, 139, 168, 0.2); border-color: rgba(243, 139, 168, 0.4); }
+}
+
+window.Bar .battery-pill {
+  transition: background 0.3s ease, color 0.3s ease;
+  
+  &.charging {
+    background: #00ad4e;
+    label {
+      color: #11111b;
+    }
+  }
+  
+  &.low {
+    animation: blink-red 2s infinite ease-in-out;
+    label {
+      color: #f38ba8;
+    }
+  }
+}
+
+window.Bar .battery-icon {
+  font-size: 1.1em;
+}
+
+.wifi-toggle-btn {
+  color: #a6adc8; /* Default off color */
+  transition: color 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  
+  &.active {
+    color: #a6e3a1; /* Green when ON */
+  }
+}
+
+button.pill.active.state-power-saver { background-color: #00a849; color: #11111b; }
+button.pill.active.state-balanced { background-color: #89dceb; color: #11111b; }
+button.pill.active.state-performance { background-color: #e8291c; color: #11111b; }
+button.pill.active .profile-icon, button.pill.active .profile-text { color: #11111b; }
+
+

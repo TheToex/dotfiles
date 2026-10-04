@@ -1,19 +1,23 @@
 local mainMod = "SUPER"
 
 local terminal = "kitty"
+
+
 local fileManager = "thunar"
-local menu = "rofi -show drun -config ~/.config/hypr/themes/current/rofi/config.rasi"
+local menu = "ags toggle launcher"
 
 -- ===================
 -- === KEYBINDINGS ===
 -- ===================
 
-hl.bind(mainMod .. " + ESCAPE", hl.dsp.exec_cmd("~/.config/rofi/scripts/powermenu.sh"))
-hl.bind(mainMod .. " + N",      hl.dsp.exec_cmd("swaync-client -t"))
-hl.bind(mainMod .. " + A",      hl.dsp.exec_cmd("~/.config/rofi/scripts/theme.sh"))
+--hl.bind(mainMod .. " + ESCAPE", hl.dsp.exec_cmd("~/.config/rofi/scripts/powermenu.sh"))
+--hl.bind(mainMod .. " + N",      hl.dsp.exec_cmd("swaync-client -t"))
+--hl.bind(mainMod .. " + A",      hl.dsp.exec_cmd("~/.config/rofi/scripts/theme.sh"))
 hl.bind(mainMod .. " + T",      hl.dsp.exec_cmd(terminal))
-
 hl.bind(mainMod .. " + Q",      hl.dsp.window.close())
+
+
+
 hl.bind(mainMod .. " + L",      hl.dsp.exec_cmd("hyprlock"))
 hl.bind(mainMod .. " + F",      hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + F11",    hl.dsp.window.fullscreen())
@@ -36,13 +40,30 @@ hl.bind(mainMod .. " + Tab",    hl.dsp.exec_cmd("hyprctl dispatch cyclenext"))
 hl.bind(mainMod .. " + Tab",    hl.dsp.exec_cmd("hyprctl dispatch bringactivetotop"))
 
 -- TouchPad
--- متغیر برای ذخیره وضعیت فعلی تاچ‌پد (پیش‌فرض روشن)
+-- متغیر برای ذخیره وضعیت فعلی تاچ‌پد (خواندن از فایل برای هماهنگی با ریبوت)
 local tp_enabled = true
+local f = io.open(os.getenv("HOME") .. "/.config/hypr/.touchpad_state", "r")
+if f then
+    local content = f:read("*a")
+    f:close()
+    if content:match("false") then
+        tp_enabled = false
+    end
+else
+    tp_enabled = false -- پیش‌فرض خاموش به خاطر فایل autostart قبلی
+end
 
 -- کلید ترکیبی Win + M با اجرای یک تابع مستقیم Lua
 hl.bind(mainMod .. " + M", function()
     -- معکوس کردن وضعیت
     tp_enabled = not tp_enabled
+    
+    -- ذخیره وضعیت در فایل برای ریبوت بعدی
+    local fw = io.open(os.getenv("HOME") .. "/.config/hypr/.touchpad_state", "w")
+    if fw then
+        fw:write(tp_enabled and "true" or "false")
+        fw:close()
+    end
     
     -- اعمال تنظیمات جدید به دستگاه به صورت در لحظه
     hl.device({
@@ -52,9 +73,9 @@ hl.bind(mainMod .. " + M", function()
     
     -- ارسال نوتیفیکیشن سیستم
     if tp_enabled then
-        os.execute("notify-send 'Touchpad' 'ON' &")
+        os.execute("notify-send -t 1500 'Touchpad' 'ON' &")
     else
-        os.execute("notify-send 'Touchpad' 'OFF' &")
+        os.execute("notify-send -t 1500 'Touchpad' 'OFF' &")
     end
 end)
 
