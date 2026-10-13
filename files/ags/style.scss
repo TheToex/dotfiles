@@ -277,10 +277,44 @@ window.Launcher, window.NotificationCenter, window.AudioMenu, window.WifiMenu, w
     border-radius: 8px;
     padding: 8px;
     margin: 2px 0;
+    outline: none;
     
-    &:hover, &:focus, &.selected { 
+    &:hover, &.selected { 
       background: $hover; 
+    }
+
+    &:focus {
       outline: none;
+      box-shadow: none;
+    }
+  }
+
+  .audio-icon-btn {
+    border-radius: 10px;
+    min-width: 38px;
+    min-height: 38px;
+    padding: 0;
+    margin: 0;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: background 0.15s ease, border-color 0.15s ease;
+
+    label {
+      font-size: 1.3em;
+
+      &.muted {
+        margin-right: 2px;
+      }
+    }
+
+    &:hover {
+      background: $hover;
+      border-color: rgba(203, 166, 247, 0.3);
+    }
+
+    &:focus {
+      outline: none;
+      box-shadow: none;
     }
   }
 }
@@ -420,7 +454,7 @@ window.Bar .battery-icon {
 
 button.pill.active.state-power-saver { background-color: #00a849; color: #11111b; }
 button.pill.active.state-balanced { background-color: #89dceb; color: #11111b; }
-button.pill.active.state-performance { background-color: #e8291c; color: #11111b; }
+button.pill.active.state-performance { background-color: #c200ae; color: #11111b; }
 button.pill.active .profile-icon, button.pill.active .profile-text { color: #11111b; }
 
 /* System Tray Menu Popover */
@@ -495,7 +529,7 @@ window.NotificationCenter {
 
     .cc-avatar {
       border: 2px solid $accent;
-      border-radius: 99px;
+      border-radius: 50%;
       min-width: 44px;
       min-height: 44px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
@@ -744,7 +778,7 @@ window.Bar .notif-bell {
   }
 
   &.has-unread:not(.active) .notif-bell-icon {
-    color: #f9e2af; /* رنگ طلایی ثابت برای آیکون هنگام دریافت نوتیف جدید */
+    color: #ffea00; /* رنگ طلایی ثابت برای آیکون هنگام دریافت نوتیف جدید */
   }
 
   &.active {

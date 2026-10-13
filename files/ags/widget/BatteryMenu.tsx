@@ -25,6 +25,7 @@ export default function BatteryMenu(gdkmonitor: Gdk.Monitor) {
     <window
       visible={false}
       name="battery-menu"
+      namespace="battery-menu"
       class="BatteryMenu"
       gdkmonitor={gdkmonitor}
       exclusivity={Astal.Exclusivity.IGNORE}

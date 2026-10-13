@@ -21,6 +21,7 @@ export default function WifiMenu(gdkmonitor: Gdk.Monitor) {
     <window
       visible={false}
       name="wifi-menu"
+      namespace="wifi-menu"
       class="WifiMenu"
       gdkmonitor={gdkmonitor}
       exclusivity={Astal.Exclusivity.IGNORE}

@@ -10,6 +10,7 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
     <window
       visible={false}
       name="audio-menu"
+      namespace="audio-menu"
       class="AudioMenu"
       gdkmonitor={gdkmonitor}
       exclusivity={Astal.Exclusivity.IGNORE}
@@ -30,7 +31,7 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
       <box orientation={Gtk.Orientation.VERTICAL}>
 
         {/* MIDDLE ROW: Contains the menu and side padding */}
-        <box orientation={Gtk.Orientation.HORIZONTAL}>
+        <box orientation={Gtk.Orientation.HORIZONTAL} valign={Gtk.Align.START} vexpand={false}>
           
           {/* Left side padding */}
           <button 
@@ -46,6 +47,8 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
             spacing={16} 
             widthRequest={340} 
             hexpand={false}
+            vexpand={false}
+            valign={Gtk.Align.START}
             halign={Gtk.Align.END}
             margin-top={0} 
             margin-bottom={0} 
@@ -56,6 +59,8 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
             <box orientation={Gtk.Orientation.HORIZONTAL}>
               <label label="Volume" css="font-weight: bold; font-size: 1.1em;" halign={Gtk.Align.START} hexpand />
               <button 
+                focusable={false}
+                canFocus={false}
                 css="background: transparent; border: none; box-shadow: none; padding: 0; margin-right: 12px;" 
                 onClicked={() => {
                   execAsync("pavucontrol").catch(() => {})
@@ -68,9 +73,24 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
 
             {/* Speaker Row */}
             <box spacing={12} valign={Gtk.Align.CENTER}>
-              <button class="pill" onClicked={() => execAsync("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle").catch(() => {})}>
+              <button 
+                class="audio-icon-btn" 
+                focusable={false}
+                canFocus={false}
+                hexpand={false}
+                vexpand={false}
+                valign={Gtk.Align.CENTER}
+                halign={Gtk.Align.CENTER}
+                widthRequest={38}
+                heightRequest={38}
+                onClicked={() => execAsync("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle").catch(() => {})}
+              >
                 <label 
-                  css="font-size: 1.4em;" 
+                  css="font-size: 1.3em;" 
+                  halign={Gtk.Align.CENTER}
+                  valign={Gtk.Align.CENTER}
+                  hexpand={false}
+                  vexpand={false}
                   $={(lbl) => {
                     const volPoll = createPoll("󰕾", 100, () => 
                       execAsync("wpctl get-volume @DEFAULT_AUDIO_SINK@").then(out => {
@@ -132,17 +152,49 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
 
             {/* Microphone Row */}
             <box spacing={12} valign={Gtk.Align.CENTER}>
-              <button class="pill" onClicked={() => execAsync("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle").catch(() => {})}>
+              <button 
+                class="audio-icon-btn" 
+                focusable={false}
+                canFocus={false}
+                hexpand={false}
+                vexpand={false}
+                valign={Gtk.Align.CENTER}
+                halign={Gtk.Align.CENTER}
+                widthRequest={38}
+                heightRequest={38}
+                onClicked={() => {
+                  execAsync("pactl set-source-mute @DEFAULT_SOURCE@ toggle")
+                    .catch(() => execAsync("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"))
+                    .catch(() => {})
+                }}
+              >
                 <label 
-                  css="font-size: 1.4em;" 
+                  css="font-size: 1.3em;"
+                  halign={Gtk.Align.CENTER}
+                  valign={Gtk.Align.CENTER}
+                  hexpand={false}
+                  vexpand={false}
                   $={(lbl) => {
                     const micPoll = createPoll("󰍬", 100, () => 
-                      execAsync("wpctl get-volume @DEFAULT_AUDIO_SOURCE@").then(out => {
-                        return out.includes("MUTED") ? "󰍭" : "󰍬"
-                      }).catch(() => "󰍬")
+                      execAsync("pactl get-source-mute @DEFAULT_SOURCE@").then(out => {
+                        return out.toLowerCase().includes("yes") ? "󰍭" : "󰍬"
+                      }).catch(() => 
+                        execAsync("wpctl get-volume @DEFAULT_AUDIO_SOURCE@").then(out => {
+                          return out.includes("MUTED") ? "󰍭" : "󰍬"
+                        }).catch(() => "󰍬")
+                      )
                     )
-                    micPoll.subscribe(() => lbl.set_label(micPoll.get()))
-                    lbl.set_label(micPoll.get())
+                    const updateMicVisual = () => {
+                      const icon = micPoll.get()
+                      lbl.set_label(icon)
+                      if (icon === "󰍭") {
+                        lbl.add_css_class("muted")
+                      } else {
+                        lbl.remove_css_class("muted")
+                      }
+                    }
+                    micPoll.subscribe(updateMicVisual)
+                    updateMicVisual()
                   }} 
                 />
               </button>
@@ -154,22 +206,41 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
                 scale.connect("value-changed", () => {
                   if (updating) return
                   const v = Math.round(scale.get_value())
-                  execAsync(`wpctl set-volume @DEFAULT_AUDIO_SOURCE@ ${v / 100}`).catch(() => {})
-                  if (v === 0) execAsync(`wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 1`).catch(() => {})
-                  else execAsync(`wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 0`).catch(() => {})
+                  execAsync(`pactl set-source-volume @DEFAULT_SOURCE@ ${v}%`)
+                    .catch(() => execAsync(`wpctl set-volume @DEFAULT_AUDIO_SOURCE@ ${v / 100}`))
+                    .catch(() => {})
+                  if (v === 0) {
+                    execAsync("pactl set-source-mute @DEFAULT_SOURCE@ 1")
+                      .catch(() => execAsync("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 1"))
+                      .catch(() => {})
+                  } else {
+                    execAsync("pactl set-source-mute @DEFAULT_SOURCE@ 0")
+                      .catch(() => execAsync("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 0"))
+                      .catch(() => {})
+                  }
                 })
 
                 const micPoll = createPoll(50, 100, () => 
-                  execAsync("wpctl get-volume @DEFAULT_AUDIO_SOURCE@").then(out => {
-                    if (out.includes("MUTED")) return 0
-                    const parts = out.split(":")
-                    if (parts.length < 2) return 50
-                    const v = parseFloat(parts[1])
-                    return isNaN(v) ? 50 : v * 100
-                  }).catch(() => 50)
+                  execAsync("pactl get-source-mute @DEFAULT_SOURCE@").then(muteOut => {
+                    if (muteOut.toLowerCase().includes("yes")) return 0
+                    return execAsync("pactl get-source-volume @DEFAULT_SOURCE@").then(volOut => {
+                      const match = volOut.match(/(\d+)%/)
+                      return match ? parseInt(match[1]) : 50
+                    })
+                  }).catch(() => 
+                    execAsync("wpctl get-volume @DEFAULT_AUDIO_SOURCE@").then(out => {
+                      if (out.includes("MUTED")) return 0
+                      const parts = out.split(":")
+                      if (parts.length < 2) return 50
+                      const v = parseFloat(parts[1])
+                      return isNaN(v) ? 50 : v * 100
+                    }).catch(() => 50)
+                  )
                 )
 
                 micPoll.subscribe(() => {
+                  const Gtk = imports.gi.Gtk
+                  if (scale.get_state_flags() & Gtk.StateFlags.ACTIVE) return
                   updating = true
                   adj.set_value(micPoll.get())
                   updating = false

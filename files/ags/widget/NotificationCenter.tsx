@@ -90,7 +90,7 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
       gdkmonitor={gdkmonitor}
       exclusivity={Astal.Exclusivity.IGNORE}
       keymode={Astal.Keymode.NONE}
-      layer={Astal.Layer.TOP}
+      layer={Astal.Layer.OVERLAY}
       anchor={TOP | BOTTOM | RIGHT}
       margin-top={47}
       margin-bottom={6}

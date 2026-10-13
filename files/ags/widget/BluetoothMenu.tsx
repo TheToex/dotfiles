@@ -15,6 +15,7 @@ export default function BluetoothMenu(gdkmonitor: Gdk.Monitor) {
     <window
       visible={false}
       name="bluetooth-menu"
+      namespace="bluetooth-menu"
       class="BluetoothMenu"
       gdkmonitor={gdkmonitor}
       exclusivity={Astal.Exclusivity.IGNORE}

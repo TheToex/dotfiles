@@ -12,6 +12,7 @@ export default function DateMenu(gdkmonitor: Gdk.Monitor) {
     <window
       visible={false}
       name="date-menu"
+      namespace="date-menu"
       class="DateMenu"
       gdkmonitor={gdkmonitor}
       exclusivity={Astal.Exclusivity.IGNORE}

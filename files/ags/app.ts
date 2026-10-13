@@ -23,6 +23,15 @@ app.start({
         return
       }
     }
+    if (req.startsWith("toggle ")) {
+      const name = req.replace("toggle ", "").trim()
+      const win = app.get_window(name)
+      if (win) {
+        win.visible = !win.visible
+        res("toggled " + name)
+        return
+      }
+    }
     res("ok")
   },
   main() {

@@ -17,6 +17,7 @@ export default function PowerMenu(gdkmonitor: Gdk.Monitor) {
     <window
       visible={false}
       name="power-menu"
+      namespace="power-menu"
       class="PowerMenu"
       gdkmonitor={gdkmonitor}
       exclusivity={Astal.Exclusivity.IGNORE}
