@@ -1,0 +1,772 @@
+$bg: rgba(30, 30, 46, 0.85);
+$popup-bg: #1e1e2e; // 100% opacity solid
+$fg: #cdd6f4;
+$accent: #cba6f7;
+$border: rgba(203, 166, 247, 0.4);
+$hover: rgba(203, 166, 247, 0.2);
+
+* {
+  all: unset;
+  font-family: "JetBrainsMono Nerd Font", "Ubuntu Nerd Font", sans-serif;
+  color: $fg;
+}
+
+window.Bar {
+  background: transparent;
+  
+  > centerbox {
+    background: transparent;
+    border: none;
+    margin: 5px 4px 0px 4px;
+    padding: 0;
+  }
+
+  .pill {
+    background: $bg;
+    border: 1px solid $border;
+    border-radius: 12px;
+    padding: 0 12px;
+    margin: 2px;
+    min-height: 30px; /* Uniform height for all items */
+    transition: background-color 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+    &.active {
+      background-color: #89dceb;
+      label, image {
+        color: #11111b;
+      }
+      
+      &.state-power-saver { background-color: #00a849; }
+      &.state-balanced { background-color: #89dceb; }
+      &.state-performance { background-color: #e8291c; }
+    }
+  }
+
+  .pill.power {
+    background: rgba(243, 139, 168, 0.2);
+    border-color: rgba(243, 139, 168, 0.4);
+  }
+
+  .pill.tray {
+    padding: 0 6px;
+
+    menubutton {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 0;
+      margin: 0;
+
+      > button {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        padding: 2px 4px;
+        margin: 0;
+        min-height: 26px;
+        min-width: 24px;
+        border-radius: 8px;
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.1);
+        }
+      }
+    }
+  }
+
+  .pill.quicksettings {
+    padding: 0 4px;
+
+    button {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 0 6px;
+      margin: 2px 1px;
+      min-height: 26px;
+      min-width: 24px;
+      border-radius: 8px;
+      transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      &.active {
+        background: #89dceb;
+        label {
+          color: #11111b;
+        }
+      }
+    }
+  }
+
+  .logo-workspaces {
+    background: $bg;
+    border: 1px solid $border;
+    padding: 0 4px;
+    margin: 2px;
+    border-radius: 12px;
+    min-height: 30px; /* Match the pill height */
+  }
+
+  .clock {
+    font-weight: 900;
+    margin: 0;
+  }
+
+  .workspaces button {
+    border-radius: 8px;
+    min-width: 20px;
+    min-height: 20px;
+    margin: 2px;
+    padding: 0;
+    transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    background: rgba(255, 255, 255, 0.1);
+    
+    label, image { 
+      font-size: 0.9em; 
+      margin: 0;
+    }
+    
+    &.focused {
+      background: #89dceb;
+      border: none;
+      min-width: 28px;
+      border-radius: 8px;
+      
+      label, image {
+        color: #11111b;
+      }
+    }
+  }
+
+  button.arch-logo {
+    border-radius: 8px;
+    padding: 2px 6px;
+    margin-right: 2px;
+  }
+
+  button {
+    border-radius: 8px;
+    padding: 2px 8px;
+    margin: 2px;
+    transition: background 0.2s;
+    font-weight: bold;
+  }
+}
+
+window.Dock {
+  background: transparent;
+
+  > box {
+    background: $bg;
+    border: 1px solid $border;
+    border-radius: 16px;
+    margin-bottom: 10px;
+    padding: 6px;
+  }
+
+  button {
+    border-radius: 12px;
+    padding: 8px 12px;
+    margin: 0 4px;
+    transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    
+    &:hover {
+      background: $accent;
+    }
+    
+    image { font-size: 24px; }
+  }
+
+  .running-app {
+    border-bottom: 2px solid $accent;
+  }
+
+  .separator {
+    opacity: 0.3;
+    margin: 0 4px;
+  }
+
+  .pin-icon {
+    font-size: 1.5em;
+    opacity: 0.5;
+  }
+}
+
+window.Launcher, window.NotificationCenter, window.AudioMenu, window.WifiMenu, window.BluetoothMenu, window.PowerMenu, window.BatteryMenu, window.DateMenu {
+  background: transparent;
+  
+  .box {
+    background: $popup-bg;
+    border: 1px solid $border;
+    border-radius: 16px;
+    padding: 16px;
+    margin: 12px;
+  }
+
+  calendar {
+    background: transparent;
+    color: $fg;
+    border: none;
+    font-size: 0.95em;
+
+    header {
+      color: $fg;
+      padding-bottom: 8px;
+
+      button {
+        background: transparent;
+        border: none;
+        border-radius: 8px;
+        padding: 4px 8px;
+        color: $accent;
+
+        &:hover {
+          background: $hover;
+        }
+      }
+
+      label, stack {
+        color: $fg;
+        font-weight: bold;
+        font-size: 1.05em;
+      }
+    }
+
+    grid {
+      label {
+        padding: 6px;
+        border-radius: 8px;
+        color: $fg;
+        transition: background 0.15s ease;
+
+        &:hover {
+          background: $hover;
+        }
+
+        &:selected {
+          background: $accent;
+          color: #11111b;
+          font-weight: bold;
+        }
+
+        &:today {
+          color: $accent;
+          font-weight: 900;
+        }
+
+        &:disabled {
+          opacity: 0.3;
+        }
+      }
+    }
+  }
+
+  entry {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid $border;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    color: $fg;
+  }
+
+  button {
+    border-radius: 8px;
+    padding: 8px;
+    margin: 2px 0;
+    
+    &:hover, &:focus, &.selected { 
+      background: $hover; 
+      outline: none;
+    }
+  }
+}
+
+scale {
+  padding: 0;
+  margin: 0 8px;
+  
+  trough {
+    background: rgba(255,255,255,0.1);
+    border-radius: 8px;
+    min-height: 6px;
+  }
+  
+  highlight {
+    background: $accent;
+    border-radius: 8px;
+  }
+  
+  slider {
+    background: $fg;
+    border-radius: 50%;
+    min-width: 12px;
+    min-height: 12px;
+    margin: -3px 0;
+    border: 1px solid $border;
+  }
+}
+
+.notification-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-left: 3px solid $accent;
+  
+  .title {
+    font-weight: bold;
+    font-size: 1.1em;
+  }
+  .body {
+    opacity: 0.8;
+  }
+}
+
+.wifi-connected-lbl {
+  color: #a6e3a1;
+  font-weight: bold;
+  font-size: 0.9em;
+}
+
+.wifi-disconnect-lbl {
+  color: #f38ba8;
+  font-weight: bold;
+  font-size: 0.9em;
+}
+
+.wifi-active-btn {
+  background: rgba(166, 227, 161, 0.1); 
+  border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.wifi-connect-lbl {
+  font-size: 0.9em;
+}
+
+.wifi-empty-lbl {
+  opacity: 0.5; 
+  padding: 20px;
+}
+
+.wifi-icon-lbl {
+  font-size: 1.5em; 
+  font-weight: 900; 
+  color: #89b4fa; 
+  margin-right: 8px;
+}
+
+window.Launcher .box {
+  background: $popup-bg;
+}
+
+window.Bar .power-pill {
+  background: $bg;
+  border: 1px solid $border;
+  border-radius: 12px;
+  margin: 2px;
+  min-height: 30px;
+  min-width: 36px;
+  padding: 0;
+  transition: background 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  
+  &.active {
+    background: #e03131;
+    label, image {
+      color: #11111b;
+    }
+  }
+}
+
+@keyframes blink-red {
+  0% { background: rgba(243, 139, 168, 0.2); border-color: rgba(243, 139, 168, 0.4); }
+  50% { background: rgba(243, 139, 168, 0.6); border-color: rgba(243, 139, 168, 0.8); }
+  100% { background: rgba(243, 139, 168, 0.2); border-color: rgba(243, 139, 168, 0.4); }
+}
+
+window.Bar .battery-pill {
+  transition: background 0.3s ease, color 0.3s ease;
+  
+  &.charging {
+    background: #00ad4e;
+    label {
+      color: #11111b;
+    }
+  }
+  
+  &.low {
+    animation: blink-red 2s infinite ease-in-out;
+    label {
+      color: #f38ba8;
+    }
+  }
+}
+
+window.Bar .battery-icon {
+  font-size: 1.1em;
+}
+
+.wifi-toggle-btn {
+  color: #a6adc8; /* Default off color */
+  transition: color 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  
+  &.active {
+    color: #a6e3a1; /* Green when ON */
+  }
+}
+
+button.pill.active.state-power-saver { background-color: #00a849; color: #11111b; }
+button.pill.active.state-balanced { background-color: #89dceb; color: #11111b; }
+button.pill.active.state-performance { background-color: #e8291c; color: #11111b; }
+button.pill.active .profile-icon, button.pill.active .profile-text { color: #11111b; }
+
+/* System Tray Menu Popover */
+popover.menu, popover {
+  background: transparent;
+  padding: 0;
+
+  > arrow {
+    background: transparent;
+    border: none;
+  }
+
+  > contents {
+    background: $popup-bg;
+    border: 1px solid $border;
+    border-radius: 14px;
+    padding: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+    modelbutton {
+      border-radius: 8px;
+      padding: 6px 12px;
+      margin: 2px 0;
+      color: $fg;
+      font-weight: 500;
+      font-size: 0.95em;
+      transition: background 0.15s ease, color 0.15s ease;
+
+      label {
+        color: $fg;
+      }
+
+      &:hover {
+        background: $hover;
+        color: $accent;
+
+        label {
+          color: $accent;
+        }
+      }
+
+      &:disabled {
+        opacity: 0.4;
+      }
+    }
+
+    separator {
+      background: $border;
+      min-height: 1px;
+      margin: 4px 6px;
+      opacity: 0.4;
+    }
+  }
+}
+
+/* =========================================================
+   Control Center & Notification Center Drawer Styles
+   ========================================================= */
+window.NotificationCenter {
+  background: transparent;
+
+  .drawer {
+    background: $popup-bg;
+    border: 1px solid $border;
+    border-radius: 10px;
+    padding: 18px;
+    box-shadow: -10px 10px 36px rgba(0, 0, 0, 0.6);
+  }
+
+  .cc-header {
+    padding-bottom: 4px;
+
+    .cc-avatar {
+      border: 2px solid $accent;
+      border-radius: 99px;
+      min-width: 44px;
+      min-height: 44px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+      padding: 0;
+    }
+
+    .cc-header-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid $border;
+      border-radius: 10px;
+      min-width: 32px;
+      min-height: 32px;
+      padding: 0;
+      transition: all 0.15s ease;
+
+      &:hover {
+        background: $hover;
+        color: $accent;
+      }
+
+      &.close-btn:hover {
+        background: rgba(243, 139, 168, 0.2);
+        color: #f38ba8;
+        border-color: rgba(243, 139, 168, 0.4);
+      }
+    }
+  }
+
+  .cc-toggle {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 10px 12px;
+    transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    &.active {
+      background: #89b4fa;
+      border-color: #89b4fa;
+
+      .cc-toggle-icon, .cc-toggle-title, .cc-toggle-sub {
+        color: #11111b;
+      }
+    }
+
+    &.active-power-saver {
+      background: #a6e3a1;
+      border-color: #a6e3a1;
+
+      .cc-toggle-icon, .cc-toggle-title, .cc-toggle-sub {
+        color: #11111b;
+      }
+    }
+
+    &.active-balanced {
+      background: #89dceb;
+      border-color: #89dceb;
+
+      .cc-toggle-icon, .cc-toggle-title, .cc-toggle-sub {
+        color: #11111b;
+      }
+    }
+
+    &.active-performance {
+      background: #f38ba8;
+      border-color: #f38ba8;
+
+      .cc-toggle-icon, .cc-toggle-title, .cc-toggle-sub {
+        color: #11111b;
+      }
+    }
+  }
+
+  .cc-slider-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 6px 12px;
+
+    .cc-slider-icon-btn {
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: $accent;
+    }
+
+    .cc-slider-value {
+      color: $fg;
+      opacity: 0.8;
+    }
+  }
+
+  .cc-media-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 10px 14px;
+
+    .cc-media-art {
+      background: rgba(203, 166, 247, 0.15);
+      border-radius: 10px;
+      min-width: 36px;
+      min-height: 36px;
+    }
+
+    .cc-media-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      min-width: 28px;
+      min-height: 28px;
+      padding: 0;
+      transition: all 0.15s ease;
+
+      &:hover {
+        background: $hover;
+        color: $accent;
+      }
+
+      &.play-btn {
+        background: rgba(137, 180, 250, 0.2);
+        color: $accent;
+
+        &:hover {
+          background: $accent;
+          color: #11111b;
+        }
+      }
+    }
+  }
+
+  .notif-header {
+    padding: 4px 2px;
+
+    .notif-title {
+      color: $fg;
+    }
+
+    .notif-clear-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 4px 10px;
+      color: $fg;
+      transition: all 0.15s ease;
+
+      &:hover {
+        background: rgba(243, 139, 168, 0.15);
+        color: #f38ba8;
+        border-color: rgba(243, 139, 168, 0.35);
+      }
+    }
+  }
+
+  .notif-scroll {
+    min-height: 180px;
+  }
+
+  .notification-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 14px;
+    padding: 10px 12px;
+    border-left: 4px solid $accent;
+    transition: background 0.15s ease, border-color 0.15s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.07);
+    }
+
+    &.critical {
+      border-left-color: #f38ba8;
+    }
+
+    .notif-card-app {
+      font-weight: bold;
+      font-size: 0.82em;
+      color: $accent;
+    }
+
+    .notif-card-time {
+      font-size: 0.78em;
+      opacity: 0.55;
+    }
+
+    .notif-card-close {
+      background: transparent;
+      border: none;
+      padding: 2px 6px;
+      border-radius: 6px;
+      opacity: 0.6;
+      font-size: 0.85em;
+
+      &:hover {
+        background: rgba(243, 139, 168, 0.2);
+        color: #f38ba8;
+        opacity: 1;
+      }
+    }
+
+    .notif-card-summary {
+      font-weight: bold;
+      font-size: 0.95em;
+      color: $fg;
+    }
+
+    .notif-card-body {
+      font-size: 0.85em;
+      opacity: 0.8;
+      color: $fg;
+      line-height: 1.25;
+    }
+  }
+
+  .notif-empty-icon {
+    font-size: 3em;
+    opacity: 0.25;
+    color: $accent;
+  }
+
+  .notif-empty-title {
+    font-size: 1.1em;
+    font-weight: bold;
+    opacity: 0.5;
+  }
+
+  .notif-empty-sub {
+    font-size: 0.85em;
+    opacity: 0.35;
+  }
+}
+
+window.Bar .notif-bell {
+  min-width: 25px; /* <--- عرض دکمه زنگوله (بر حسب پیکسل) */
+  min-height: 30px;
+  padding: 0 4px;  /* <--- پدینگ دکمه زنگوله */
+  transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+  .notif-bell-icon {
+    font-size: 1.15em;
+    font-weight: 900;
+    transition: color 0.15s ease;
+  }
+
+  &.has-unread:not(.active) .notif-bell-icon {
+    color: #f9e2af; /* رنگ طلایی ثابت برای آیکون هنگام دریافت نوتیف جدید */
+  }
+
+  &.active {
+    background: #89dceb;
+    border-color: #89dceb;
+    .notif-bell-icon {
+      color: #11111b;
+    }
+  }
+}
+
+window.NotificationCenterBackdrop {
+  background: rgba(0, 0, 0, 0.01);
+  button {
+    background: rgba(0, 0, 0, 0.01);
+    border: none;
+    box-shadow: none;
+    outline: none;
+  }
+}
+
+
+
+
+

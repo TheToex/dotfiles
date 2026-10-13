@@ -85,3 +85,10 @@ hl.window_rule({
     size = "1080 720",
     opacity = "1.0 override 1.0 override",
 })
+
+-- ۳. قوانین لایه‌ها (Layer Rules)
+hl.layer_rule({
+    match = { namespace = "notification-center" },
+    animation = "slide right",
+    blur = true,
+})

@@ -111,7 +111,10 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
                 const volPoll = createPoll(50, 100, () => 
                   execAsync("wpctl get-volume @DEFAULT_AUDIO_SINK@").then(out => {
                     if (out.includes("MUTED")) return 0
-                    return parseFloat(out.split(":")[1]) * 100
+                    const parts = out.split(":")
+                    if (parts.length < 2) return 50
+                    const v = parseFloat(parts[1])
+                    return isNaN(v) ? 50 : v * 100
                   }).catch(() => 50)
                 )
 
@@ -159,7 +162,10 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
                 const micPoll = createPoll(50, 100, () => 
                   execAsync("wpctl get-volume @DEFAULT_AUDIO_SOURCE@").then(out => {
                     if (out.includes("MUTED")) return 0
-                    return parseFloat(out.split(":")[1]) * 100
+                    const parts = out.split(":")
+                    if (parts.length < 2) return 50
+                    const v = parseFloat(parts[1])
+                    return isNaN(v) ? 50 : v * 100
                   }).catch(() => 50)
                 )
 
