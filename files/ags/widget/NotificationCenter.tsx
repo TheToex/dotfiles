@@ -1,7 +1,8 @@
 import app from "ags/gtk4/app"
 import { Astal, Gtk, Gdk } from "ags/gtk4"
-import { createPoll } from "ags/time"
+import { createPoll, interval } from "ags/time"
 import { execAsync } from "ags/process"
+import { createState } from "ags"
 import { notifService, NotificationItem } from "../service/notifications"
 import { globalState } from "../utils"
 import GLib from "gi://GLib"
@@ -16,44 +17,59 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
       .catch(() => "󰔛 online")
   )
 
-  // Wi-Fi poll
-  const wifiState = createPoll({ enabled: true, ssid: "Checking..." }, 2000, () =>
+  // Wi-Fi state & refresh
+  const [wifiState, setWifiState] = createState({ enabled: true, ssid: "Checking..." })
+  const refreshWifi = () => {
     Promise.all([
       execAsync("nmcli radio wifi").catch(() => "disabled"),
       execAsync("nmcli -t -f ACTIVE,SSID dev wifi").catch(() => ""),
     ])
       .then(([radio, dev]) => {
         const enabled = radio.trim() === "enabled"
-        if (!enabled) return { enabled: false, ssid: "Turned Off" }
+        if (!enabled) {
+          setWifiState({ enabled: false, ssid: "Turned Off" })
+          return
+        }
         const activeLine = dev.split("\n").find((l) => l.startsWith("yes:"))
         const ssid = activeLine ? activeLine.split(":")[1] || "Connected" : "Disconnected"
-        return { enabled: true, ssid }
+        setWifiState({ enabled: true, ssid })
       })
-      .catch(() => ({ enabled: false, ssid: "Offline" }))
-  )
+      .catch(() => setWifiState({ enabled: false, ssid: "Offline" }))
+  }
+  refreshWifi()
+  interval(3000, refreshWifi)
 
-  // Bluetooth poll
-  const btState = createPoll({ enabled: true, device: "Checking..." }, 2000, () =>
+  // Bluetooth state & refresh
+  const [btState, setBtState] = createState({ enabled: true, device: "Checking..." })
+  const refreshBt = () => {
     Promise.all([
       execAsync("bluetoothctl show").catch(() => ""),
       execAsync("bluetoothctl info").catch(() => ""),
     ])
       .then(([show, info]) => {
         const enabled = show.includes("Powered: yes")
-        if (!enabled) return { enabled: false, device: "Turned Off" }
+        if (!enabled) {
+          setBtState({ enabled: false, device: "Turned Off" })
+          return
+        }
         const nameMatch = info.match(/Name: (.*)/)
         const device = nameMatch ? nameMatch[1] : "On"
-        return { enabled: true, device }
+        setBtState({ enabled: true, device })
       })
-      .catch(() => ({ enabled: false, device: "Off" }))
-  )
+      .catch(() => setBtState({ enabled: false, device: "Off" }))
+  }
+  refreshBt()
+  interval(3000, refreshBt)
 
-  // Power Profile poll
-  const powerProfile = createPoll("balanced", 3000, () =>
+  // Power Profile state & refresh
+  const [powerProfile, setPowerProfile] = createState("balanced")
+  const refreshPower = () => {
     execAsync("powerprofilesctl get")
-      .then((p) => p.trim())
-      .catch(() => "balanced")
-  )
+      .then((p) => setPowerProfile(p.trim()))
+      .catch(() => {})
+  }
+  refreshPower()
+  interval(4000, refreshPower)
 
   // Media Player poll
   const mediaState = createPoll(
@@ -113,6 +129,11 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
           if (bd) {
             if (self.visible) bd.show()
             else bd.hide()
+          }
+          if (self.visible) {
+            refreshWifi()
+            refreshBt()
+            refreshPower()
           }
         })
       }}
@@ -197,16 +218,22 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
             <button
               class={wifiState((s) => (s.enabled ? "cc-toggle active" : "cc-toggle"))}
               onClicked={() => {
-                execAsync("nmcli radio wifi").then((r) => {
-                  const next = r.trim() === "enabled" ? "off" : "on"
-                  return execAsync(`nmcli radio wifi ${next}`)
+                const cur = wifiState.peek()
+                const nextEnabled = !cur.enabled
+                setWifiState({
+                  enabled: nextEnabled,
+                  ssid: nextEnabled ? (cur.ssid === "Turned Off" ? "Connecting..." : cur.ssid) : "Turned Off",
                 })
+                execAsync(`nmcli radio wifi ${nextEnabled ? "on" : "off"}`)
+                  .then(() => setTimeout(refreshWifi, 800))
+                  .catch(() => refreshWifi())
               }}
             >
               <box spacing={10} valign={Gtk.Align.CENTER}>
                 <label
                   label={wifiState((s) => (s.enabled ? "" : "󰤭"))}
                   class="cc-toggle-icon"
+                  halign={Gtk.Align.CENTER}
                   css="font-size: 1.35em; font-weight: 900;"
                 />
                 <box orientation={Gtk.Orientation.VERTICAL} valign={Gtk.Align.CENTER} hexpand={true}>
@@ -232,10 +259,15 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
             <button
               class={btState((s) => (s.enabled ? "cc-toggle active" : "cc-toggle"))}
               onClicked={() => {
-                execAsync("bluetoothctl show").then((show) => {
-                  const powered = show.includes("Powered: yes")
-                  return execAsync(`bluetoothctl power ${powered ? "off" : "on"}`)
+                const cur = btState.peek()
+                const nextPowered = !cur.enabled
+                setBtState({
+                  enabled: nextPowered,
+                  device: nextPowered ? (cur.device === "Turned Off" ? "On" : cur.device) : "Turned Off",
                 })
+                execAsync(`bluetoothctl power ${nextPowered ? "on" : "off"}`)
+                  .then(() => setTimeout(refreshBt, 600))
+                  .catch(() => refreshBt())
               }}
             >
               <box spacing={10} valign={Gtk.Align.CENTER}>
@@ -298,14 +330,17 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
             <button
               class={powerProfile((p) => `cc-toggle active-${p}`)}
               onClicked={() => {
-                const current = powerProfile.get()
+                const current = powerProfile.peek()
                 const next =
                   current === "power-saver"
                     ? "balanced"
                     : current === "balanced"
                     ? "performance"
                     : "power-saver"
-                execAsync(`powerprofilesctl set ${next}`).catch(() => {})
+                setPowerProfile(next)
+                execAsync(`powerprofilesctl set ${next}`)
+                  .then(() => setTimeout(refreshPower, 400))
+                  .catch(() => refreshPower())
               }}
             >
               <box spacing={10} valign={Gtk.Align.CENTER}>
@@ -562,13 +597,26 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
         {/* =========================================
             MEDIA PLAYER CARD (MPRIS)
         ========================================= */}
-        <box class="cc-media-card" spacing={12} valign={Gtk.Align.CENTER}>
-          <box class="cc-media-art" halign={Gtk.Align.CENTER} valign={Gtk.Align.CENTER}>
+        <box class="cc-media-card" spacing={12} valign={Gtk.Align.CENTER} vexpand={false}>
+          <button
+            class="cc-media-art"
+            focusable={false}
+            canFocus={false}
+            hexpand={false}
+            vexpand={false}
+            halign={Gtk.Align.CENTER}
+            valign={Gtk.Align.CENTER}
+            widthRequest={38}
+            heightRequest={38}
+          >
             <label
               label={mediaState((m) => (m.active ? "" : "󰝚"))}
-              css="font-size: 1.4em; color: #cba6f7;"
+              halign={Gtk.Align.CENTER}
+              valign={Gtk.Align.CENTER}
+              hexpand={false}
+              vexpand={false}
             />
-          </box>
+          </button>
           <box orientation={Gtk.Orientation.VERTICAL} valign={Gtk.Align.CENTER} hexpand={true}>
             <label
               class="cc-media-title"

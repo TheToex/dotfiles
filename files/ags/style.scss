@@ -570,6 +570,10 @@ window.NotificationCenter {
       border-color: rgba(255, 255, 255, 0.15);
     }
 
+    .cc-toggle-icon {
+      min-width: 24px;
+    }
+
     &.active {
       background: #89b4fa;
       border-color: #89b4fa;
@@ -635,8 +639,23 @@ window.NotificationCenter {
     .cc-media-art {
       background: rgba(203, 166, 247, 0.15);
       border-radius: 10px;
-      min-width: 36px;
-      min-height: 36px;
+      min-width: 38px;
+      min-height: 38px;
+      border: none;
+      outline: none;
+      box-shadow: none;
+      padding: 0;
+      margin: 0;
+
+      label {
+        font-size: 1.35em;
+        color: #cba6f7;
+        margin-right: 2px;
+      }
+
+      &:hover {
+        background: rgba(203, 166, 247, 0.15);
+      }
     }
 
     .cc-media-btn {
