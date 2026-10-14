@@ -184,13 +184,20 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
                         }).catch(() => "󰍬")
                       )
                     )
+                    let lastSavedState = ""
                     const updateMicVisual = () => {
                       const icon = micPoll.get()
                       lbl.set_label(icon)
-                      if (icon === "󰍭") {
+                      const isMuted = (icon === "󰍭")
+                      if (isMuted) {
                         lbl.add_css_class("muted")
                       } else {
                         lbl.remove_css_class("muted")
+                      }
+                      const stateStr = isMuted ? "muted" : "unmuted"
+                      if (stateStr !== lastSavedState) {
+                        lastSavedState = stateStr
+                        execAsync(`bash -c "echo '${stateStr}' > ~/.config/hypr/.mic_state"`).catch(() => {})
                       }
                     }
                     micPoll.subscribe(updateMicVisual)

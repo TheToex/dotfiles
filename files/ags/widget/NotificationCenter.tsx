@@ -439,87 +439,124 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
           </box>
 
           {/* Brightness Slider Card */}
-          <box class="cc-slider-card" spacing={12} valign={Gtk.Align.CENTER}>
-            <button class="cc-slider-icon-btn">
-              <label
-                css="font-size: 1.25em; font-weight: 900;"
-                $={(lbl) => {
-                  const bPoll = createPoll("󰃠", 500, () =>
+          {(() => {
+            let iconLbl: Gtk.Label | null = null
+            let valLbl: Gtk.Label | null = null
+            let isDragging = false
+            let isRunning = false
+            let pendingVal: number | null = null
+
+            const applyBrightness = (val: number) => {
+              if (isRunning) {
+                pendingVal = val
+                return
+              }
+              isRunning = true
+              execAsync(`brightnessctl -q set ${val}%`)
+                .catch(() => {})
+                .finally(() => {
+                  isRunning = false
+                  if (pendingVal !== null) {
+                    const next = pendingVal
+                    pendingVal = null
+                    applyBrightness(next)
+                  }
+                })
+            }
+
+            const updateVisuals = (val: number) => {
+              if (valLbl) valLbl.label = `${val}%`
+              if (iconLbl) {
+                if (val > 66) iconLbl.label = "󰃠"
+                else if (val > 33) iconLbl.label = "󰃟"
+                else iconLbl.label = "󰃞"
+              }
+            }
+
+            return (
+              <box class="cc-slider-card" spacing={12} valign={Gtk.Align.CENTER}>
+                <button class="cc-slider-icon-btn">
+                  <label
+                    label="󰃠"
+                    css="font-size: 1.25em; font-weight: 900;"
+                    $={(lbl) => {
+                      iconLbl = lbl
+                      execAsync("brightnessctl -m")
+                        .then((out) => {
+                          const val = parseInt(out.split(",")[3]) || 100
+                          updateVisuals(val)
+                        })
+                        .catch(() => {})
+                    }}
+                  />
+                </button>
+
+                <box hexpand={true} $={(box) => {
+                  const adj = new Gtk.Adjustment({ lower: 5, upper: 100, stepIncrement: 1, value: 100 })
+                  const scale = new Gtk.Scale({
+                    orientation: Gtk.Orientation.HORIZONTAL,
+                    adjustment: adj,
+                    drawValue: false,
+                    hexpand: true,
+                  })
+
+                  const click = new Gtk.GestureClick()
+                  click.connect("pressed", () => { isDragging = true })
+                  click.connect("released", () => { isDragging = false })
+                  scale.add_controller(click)
+
+                  let updating = false
+                  scale.connect("value-changed", () => {
+                    if (updating) return
+                    const v = Math.round(scale.get_value())
+                    updateVisuals(v)
+                    applyBrightness(v)
+                  })
+
+                  const poll = createPoll(100, 500, () =>
                     execAsync("brightnessctl -m")
                       .then((out) => {
-                        const val = parseInt(out.split(",")[3]) || 50
-                        if (val > 66) return "󰃠"
-                        if (val > 33) return "󰃟"
-                        return "󰃞"
+                        const val = parseInt(out.split(",")[3])
+                        return isNaN(val) ? 100 : val
                       })
-                      .catch(() => "󰃠")
+                      .catch(() => 100)
                   )
-                  bPoll.subscribe(() => {
-                    lbl.label = bPoll.get()
+
+                  poll.subscribe(() => {
+                    if (isDragging || (scale.get_state_flags() & Gtk.StateFlags.ACTIVE)) return
+                    updating = true
+                    const cur = poll.get()
+                    adj.set_value(cur)
+                    updateVisuals(cur)
+                    updating = false
                   })
-                }}
-              />
-            </button>
 
-            <box hexpand={true} $={(box) => {
-              const adj = new Gtk.Adjustment({ lower: 5, upper: 100, stepIncrement: 1, value: 100 })
-              const scale = new Gtk.Scale({
-                orientation: Gtk.Orientation.HORIZONTAL,
-                adjustment: adj,
-                drawValue: false,
-                hexpand: true,
-              })
-
-              let updating = false
-              let timeoutId = 0
-              scale.connect("value-changed", () => {
-                if (updating) return
-                const v = Math.round(scale.get_value())
-                if (timeoutId) GLib.source_remove(timeoutId)
-                timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 40, () => {
-                  execAsync(`brightnessctl set ${v}%`).catch(() => {})
-                  timeoutId = 0
-                  return false
-                })
-              })
-
-              const poll = createPoll(100, 500, () =>
-                execAsync("brightnessctl -m")
-                  .then((out) => {
-                    const val = parseInt(out.split(",")[3])
-                    return isNaN(val) ? 100 : val
-                  })
-                  .catch(() => 100)
-              )
-
-              poll.subscribe(() => {
-                if (scale.get_state_flags() & Gtk.StateFlags.ACTIVE) return
-                updating = true
-                adj.set_value(poll.get())
-                updating = false
-              })
-
-              box.append(scale)
-            }} />
-
-            <label
-              class="cc-slider-value"
-              css="font-size: 0.85em; font-weight: bold; min-width: 38px;"
-              $={(lbl) => {
-                const poll = createPoll("100%", 500, () =>
                   execAsync("brightnessctl -m")
                     .then((out) => {
                       const val = parseInt(out.split(",")[3])
-                      return isNaN(val) ? "100%" : `${val}%`
+                      if (!isNaN(val)) {
+                        updating = true
+                        adj.set_value(val)
+                        updateVisuals(val)
+                        updating = false
+                      }
                     })
-                    .catch(() => "100%")
-                )
-                poll.subscribe(() => {
-                  lbl.label = poll.get()
-                })
-              }}
-            />
-          </box>
+                    .catch(() => {})
+
+                  box.append(scale)
+                }} />
+
+                <label
+                  class="cc-slider-value"
+                  label="100%"
+                  css="font-size: 0.85em; font-weight: bold; min-width: 38px;"
+                  $={(lbl) => {
+                    valLbl = lbl
+                  }}
+                />
+              </box>
+            )
+          })()}
         </box>
 
         {/* =========================================

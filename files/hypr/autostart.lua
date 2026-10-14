@@ -8,7 +8,7 @@ hl.on("hyprland.start", function()
     exec("awww-daemon")
     exec("awww clear-cache")
     exec("ags run")
-    exec("awww img --transition-type grow --transition-duration 1 --transition-fps 60 ~/.config/hypr/themes/purple/wall.jpg")
+    exec("awww img --transition-type grow --transition-duration 1 --transition-fps 60 ~/.config/hypr/themes/neoprland/wall.png")
     --exec("nm-applet")
     --exec("blueman-applet")
     
@@ -41,4 +41,7 @@ hl.on("hyprland.start", function()
         name = "syna2ba6:00-06cb:ce2d-touchpad",
         enabled = tp_enabled
     })
+
+    -- بازیابی وضعیت ذخیره‌شده میکروفون
+    exec("bash -c 'for i in {1..10}; do if wpctl get-volume @DEFAULT_AUDIO_SOURCE@ >/dev/null 2>&1; then if [ \"$(cat ~/.config/hypr/.mic_state 2>/dev/null)\" = \"muted\" ]; then wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 1; else wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 0; fi; break; fi; sleep 0.5; done' &")
 end)
