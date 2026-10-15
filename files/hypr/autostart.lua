@@ -8,7 +8,7 @@ hl.on("hyprland.start", function()
     exec("awww-daemon")
     exec("awww clear-cache")
     exec("ags run")
-    exec("awww img --transition-type grow --transition-duration 1 --transition-fps 60 ~/.config/hypr/themes/neoprland/wall.png")
+    exec("awww img --transition-type grow --transition-duration 1 --transition-fps 60 ~/.config/hypr/themes/wallpapers/wall4.png")
     --exec("nm-applet")
     --exec("blueman-applet")
     

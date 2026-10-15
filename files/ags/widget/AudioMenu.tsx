@@ -1,7 +1,7 @@
 import app from "ags/gtk4/app"
 import { Astal, Gtk, Gdk } from "ags/gtk4"
-import { createPoll } from "ags/time"
 import { execAsync } from "ags/process"
+import { audioService } from "../service/audio"
 
 export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
   const { TOP, RIGHT, BOTTOM, LEFT } = Astal.WindowAnchor
@@ -26,6 +26,12 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
           }
         })
         self.add_controller(ctrl)
+
+        self.connect("notify::visible", () => {
+          if (self.visible) {
+            audioService.sync()
+          }
+        })
       }}
     >
       <box orientation={Gtk.Orientation.VERTICAL}>
@@ -83,7 +89,9 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
                 halign={Gtk.Align.CENTER}
                 widthRequest={38}
                 heightRequest={38}
-                onClicked={() => execAsync("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle").catch(() => {})}
+                onClicked={() => {
+                  audioService.toggleMute()
+                }}
               >
                 <label 
                   css="font-size: 1.3em;" 
@@ -91,59 +99,34 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
                   valign={Gtk.Align.CENTER}
                   hexpand={false}
                   vexpand={false}
+                  label={audioService.getState().volIcon}
                   $={(lbl) => {
-                    const volPoll = createPoll("󰕾", 100, () => 
-                      execAsync("wpctl get-volume @DEFAULT_AUDIO_SINK@").then(out => {
-                        if (out.includes("MUTED")) return "󰖁"
-                        const v = parseFloat(out.split(":")[1]) * 100
-                        if (v === 0) return "󰖁"
-                        if (v < 33) return "󰕿"
-                        if (v < 66) return "󰖀"
-                        return "󰕾"
-                      }).catch(() => "󰕾")
-                    )
-                    volPoll.subscribe(() => lbl.set_label(volPoll.get()))
-                    lbl.set_label(volPoll.get())
+                    audioService.subscribe((s) => {
+                      lbl.set_label(s.volIcon)
+                    })
                   }} 
                 />
               </button>
               <box hexpand $={(box) => {
-                const adj = new Gtk.Adjustment({ lower: 0, upper: 100, stepIncrement: 1, value: 50 })
+                const adj = new Gtk.Adjustment({ lower: 0, upper: 100, stepIncrement: 1, value: audioService.getDisplayVolume() })
                 const scale = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, adjustment: adj, drawValue: false, hexpand: true })
                 
                 let updating = false
-                let timeoutId = 0;
+
                 scale.connect("value-changed", () => {
                   if (updating) return
                   const v = Math.round(scale.get_value())
-                  
-                  const GLib = imports.gi.GLib;
-                  if (timeoutId) GLib.source_remove(timeoutId);
-                  timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 30, () => {
-                      execAsync(`wpctl set-volume @DEFAULT_AUDIO_SINK@ ${v / 100}`).catch(() => {})
-                      if (v === 0) execAsync(`wpctl set-mute @DEFAULT_AUDIO_SINK@ 1`).catch(() => {})
-                      else execAsync(`wpctl set-mute @DEFAULT_AUDIO_SINK@ 0`).catch(() => {})
-                      timeoutId = 0;
-                      return false;
-                  });
+                  audioService.setVolume(v)
                 })
 
-                const volPoll = createPoll(50, 100, () => 
-                  execAsync("wpctl get-volume @DEFAULT_AUDIO_SINK@").then(out => {
-                    if (out.includes("MUTED")) return 0
-                    const parts = out.split(":")
-                    if (parts.length < 2) return 50
-                    const v = parseFloat(parts[1])
-                    return isNaN(v) ? 50 : v * 100
-                  }).catch(() => 50)
-                )
-
-                volPoll.subscribe(() => {
-                  const Gtk = imports.gi.Gtk;
-                  if (scale.get_state_flags() & Gtk.StateFlags.ACTIVE) return;
-                  updating = true
-                  adj.set_value(volPoll.get())
-                  updating = false
+                audioService.subscribe((s) => {
+                  const target = s.displayVolume
+                  if (Math.round(scale.get_value()) !== target) {
+                    updating = true
+                    scale.set_value(target)
+                    adj.set_value(target)
+                    updating = false
+                  }
                 })
 
                 box.append(scale)
@@ -163,9 +146,7 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
                 widthRequest={38}
                 heightRequest={38}
                 onClicked={() => {
-                  execAsync("pactl set-source-mute @DEFAULT_SOURCE@ toggle")
-                    .catch(() => execAsync("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"))
-                    .catch(() => {})
+                  audioService.toggleMicMute()
                 }}
               >
                 <label 
@@ -174,83 +155,37 @@ export default function AudioMenu(gdkmonitor: Gdk.Monitor) {
                   valign={Gtk.Align.CENTER}
                   hexpand={false}
                   vexpand={false}
+                  label={audioService.getState().micIcon}
                   $={(lbl) => {
-                    const micPoll = createPoll("󰍬", 100, () => 
-                      execAsync("pactl get-source-mute @DEFAULT_SOURCE@").then(out => {
-                        return out.toLowerCase().includes("yes") ? "󰍭" : "󰍬"
-                      }).catch(() => 
-                        execAsync("wpctl get-volume @DEFAULT_AUDIO_SOURCE@").then(out => {
-                          return out.includes("MUTED") ? "󰍭" : "󰍬"
-                        }).catch(() => "󰍬")
-                      )
-                    )
-                    let lastSavedState = ""
-                    const updateMicVisual = () => {
-                      const icon = micPoll.get()
-                      lbl.set_label(icon)
-                      const isMuted = (icon === "󰍭")
-                      if (isMuted) {
-                        lbl.add_css_class("muted")
-                      } else {
-                        lbl.remove_css_class("muted")
-                      }
-                      const stateStr = isMuted ? "muted" : "unmuted"
-                      if (stateStr !== lastSavedState) {
-                        lastSavedState = stateStr
-                        execAsync(`bash -c "echo '${stateStr}' > ~/.config/hypr/.mic_state"`).catch(() => {})
-                      }
-                    }
-                    micPoll.subscribe(updateMicVisual)
-                    updateMicVisual()
+                    if (audioService.isSourceMuted()) lbl.add_css_class("muted")
+                    audioService.subscribe((s) => {
+                      lbl.set_label(s.micIcon)
+                      if (s.isMicMuted) lbl.add_css_class("muted")
+                      else lbl.remove_css_class("muted")
+                    })
                   }} 
                 />
               </button>
               <box hexpand $={(box) => {
-                const adj = new Gtk.Adjustment({ lower: 0, upper: 100, stepIncrement: 1, value: 50 })
+                const adj = new Gtk.Adjustment({ lower: 0, upper: 100, stepIncrement: 1, value: audioService.getDisplayMicVolume() })
                 const scale = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, adjustment: adj, drawValue: false, hexpand: true })
                 
                 let updating = false
+
                 scale.connect("value-changed", () => {
                   if (updating) return
                   const v = Math.round(scale.get_value())
-                  execAsync(`pactl set-source-volume @DEFAULT_SOURCE@ ${v}%`)
-                    .catch(() => execAsync(`wpctl set-volume @DEFAULT_AUDIO_SOURCE@ ${v / 100}`))
-                    .catch(() => {})
-                  if (v === 0) {
-                    execAsync("pactl set-source-mute @DEFAULT_SOURCE@ 1")
-                      .catch(() => execAsync("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 1"))
-                      .catch(() => {})
-                  } else {
-                    execAsync("pactl set-source-mute @DEFAULT_SOURCE@ 0")
-                      .catch(() => execAsync("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 0"))
-                      .catch(() => {})
-                  }
+                  audioService.setMicVolume(v)
                 })
 
-                const micPoll = createPoll(50, 100, () => 
-                  execAsync("pactl get-source-mute @DEFAULT_SOURCE@").then(muteOut => {
-                    if (muteOut.toLowerCase().includes("yes")) return 0
-                    return execAsync("pactl get-source-volume @DEFAULT_SOURCE@").then(volOut => {
-                      const match = volOut.match(/(\d+)%/)
-                      return match ? parseInt(match[1]) : 50
-                    })
-                  }).catch(() => 
-                    execAsync("wpctl get-volume @DEFAULT_AUDIO_SOURCE@").then(out => {
-                      if (out.includes("MUTED")) return 0
-                      const parts = out.split(":")
-                      if (parts.length < 2) return 50
-                      const v = parseFloat(parts[1])
-                      return isNaN(v) ? 50 : v * 100
-                    }).catch(() => 50)
-                  )
-                )
-
-                micPoll.subscribe(() => {
-                  const Gtk = imports.gi.Gtk
-                  if (scale.get_state_flags() & Gtk.StateFlags.ACTIVE) return
-                  updating = true
-                  adj.set_value(micPoll.get())
-                  updating = false
+                audioService.subscribe((s) => {
+                  const target = s.displayMicVolume
+                  if (Math.round(scale.get_value()) !== target) {
+                    updating = true
+                    scale.set_value(target)
+                    adj.set_value(target)
+                    updating = false
+                  }
                 })
 
                 box.append(scale)

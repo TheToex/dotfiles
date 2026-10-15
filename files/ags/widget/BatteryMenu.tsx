@@ -3,17 +3,16 @@ import { Astal, Gtk, Gdk } from "ags/gtk4"
 import { createPoll } from "ags/time"
 import { execAsync } from "ags/process"
 
+let cachedProfile = "balanced";
+let profileButtonsUpdater: ((cur: string) => void) | null = null;
+
+execAsync("powerprofilesctl get").then(out => {
+  cachedProfile = out.trim();
+  if (profileButtonsUpdater) profileButtonsUpdater(cachedProfile);
+}).catch(() => {});
+
 export default function BatteryMenu(gdkmonitor: Gdk.Monitor) {
   const { TOP, RIGHT, BOTTOM, LEFT } = Astal.WindowAnchor
-
-  // Poll power profile every 500ms for fast UI updates
-  let lastProfile = "balanced";
-  const currentProfile = createPoll("balanced", 2000, () => 
-    execAsync("powerprofilesctl get").then(out => {
-      lastProfile = out.trim();
-      return lastProfile;
-    }).catch(() => lastProfile)
-  );
 
   const profiles = [
     { id: "power-saver", icon: "󰾆", label: "Power Save" },
@@ -41,6 +40,16 @@ export default function BatteryMenu(gdkmonitor: Gdk.Monitor) {
           }
         })
         self.add_controller(ctrl)
+
+        self.connect("notify::visible", () => {
+          if (self.visible) {
+            if (profileButtonsUpdater) profileButtonsUpdater(cachedProfile);
+            execAsync("powerprofilesctl get").then(out => {
+              cachedProfile = out.trim();
+              if (profileButtonsUpdater) profileButtonsUpdater(cachedProfile);
+            }).catch(() => {});
+          }
+        })
       }}
     >
       <box orientation={Gtk.Orientation.VERTICAL}>
@@ -68,7 +77,26 @@ export default function BatteryMenu(gdkmonitor: Gdk.Monitor) {
           >
             <label label="Power Profile" css="font-weight: bold; font-size: 1.1em;" halign={Gtk.Align.START} />
 
-            <box orientation={Gtk.Orientation.HORIZONTAL} spacing={12} homogeneous={true} halign={Gtk.Align.FILL} hexpand margin-top={8} margin-bottom={4}>
+            <box 
+              orientation={Gtk.Orientation.HORIZONTAL} 
+              spacing={12} 
+              homogeneous={true} 
+              halign={Gtk.Align.FILL} 
+              hexpand 
+              margin-top={8} 
+              margin-bottom={4}
+              $={(box) => {
+                profileButtonsUpdater = (cur: string) => {
+                  let child = box.get_first_child();
+                  while (child) {
+                    if ((child as any).updateActive) {
+                      (child as any).updateActive(cur);
+                    }
+                    child = child.get_next_sibling();
+                  }
+                };
+              }}
+            >
               {profiles.map(p => (
                 <button 
                   class="pill"
@@ -85,26 +113,13 @@ export default function BatteryMenu(gdkmonitor: Gdk.Monitor) {
                         btn.remove_css_class("state-" + p.id);
                       }
                     };
-                    currentProfile.subscribe(() => updateActive(currentProfile.get()));
-                    updateActive(currentProfile.get());
-                    
-                    // Attach the updater to the button so we can call it manually
                     (btn as any).updateActive = updateActive;
+                    updateActive(cachedProfile);
                   }}
-                  onClicked={(self) => {
-                    lastProfile = p.id;
+                  onClicked={() => {
+                    cachedProfile = p.id;
                     execAsync(`powerprofilesctl set ${p.id}`).catch(() => {})
-                    // Instantly update all buttons in the box
-                    const parent = self.get_parent();
-                    if (parent) {
-                      let child = parent.get_first_child();
-                      while (child) {
-                        if ((child as any).updateActive) {
-                          (child as any).updateActive(p.id);
-                        }
-                        child = child.get_next_sibling();
-                      }
-                    }
+                    if (profileButtonsUpdater) profileButtonsUpdater(p.id);
                   }}
                 >
                   <label class="profile-text" label={p.label} css="font-size: 0.9em; font-weight: bold;" halign={Gtk.Align.CENTER} valign={Gtk.Align.CENTER} wrap={false} />
@@ -125,8 +140,9 @@ export default function BatteryMenu(gdkmonitor: Gdk.Monitor) {
                    self.setVisualState = (on: boolean) => {
                        self.currentState = on;
                        btn.label = on ? "" : ""; // MDI toggle switch icon
-                       if (on) btn.css_classes = ["wifi-toggle-btn", "active"];
-                       else btn.css_classes = ["wifi-toggle-btn"];
+                       btn.add_css_class("wifi-toggle-btn");
+                       if (on) btn.add_css_class("active");
+                       else btn.remove_css_class("active");
                    };
 
                    const update = () => {

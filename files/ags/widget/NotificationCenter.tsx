@@ -4,22 +4,39 @@ import { createPoll, interval } from "ags/time"
 import { execAsync } from "ags/process"
 import { createState } from "ags"
 import { notifService, NotificationItem } from "../service/notifications"
+import { audioService } from "../service/audio"
 import { globalState } from "../utils"
 import GLib from "gi://GLib"
+
+let activeClearAll: (() => void) | null = null
+let activeDismissFirst: (() => void) | null = null
+
+export function triggerClearAll() {
+  if (activeClearAll) activeClearAll()
+  else notifService.clearAll()
+}
+
+export function triggerDismissFirst() {
+  if (activeDismissFirst) activeDismissFirst()
+}
 
 export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
   const { TOP, BOTTOM, RIGHT } = Astal.WindowAnchor
 
   // Uptime poll
-  const uptime = createPoll("󰔛 starting...", 30000, () =>
-    execAsync("uptime -p")
+  const uptime = createPoll("󰔛 starting...", 30000, () => {
+    const win = app.get_window("notification-center")
+    if (!win || !win.visible) return "󰔛 online"
+    return execAsync("uptime -p")
       .then((u) => u.trim().replace(/^up\s+/, "󰔛 "))
       .catch(() => "󰔛 online")
-  )
+  })
 
   // Wi-Fi state & refresh
   const [wifiState, setWifiState] = createState({ enabled: true, ssid: "Checking..." })
-  const refreshWifi = () => {
+  const refreshWifi = (force = false) => {
+    const win = app.get_window("notification-center")
+    if (!force && (!win || !win.visible)) return
     Promise.all([
       execAsync("nmcli radio wifi").catch(() => "disabled"),
       execAsync("nmcli -t -f ACTIVE,SSID dev wifi").catch(() => ""),
@@ -36,12 +53,13 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
       })
       .catch(() => setWifiState({ enabled: false, ssid: "Offline" }))
   }
-  refreshWifi()
-  interval(3000, refreshWifi)
+  interval(8000, () => refreshWifi(false))
 
   // Bluetooth state & refresh
   const [btState, setBtState] = createState({ enabled: true, device: "Checking..." })
-  const refreshBt = () => {
+  const refreshBt = (force = false) => {
+    const win = app.get_window("notification-center")
+    if (!force && (!win || !win.visible)) return
     Promise.all([
       execAsync("bluetoothctl show").catch(() => ""),
       execAsync("bluetoothctl info").catch(() => ""),
@@ -58,44 +76,55 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
       })
       .catch(() => setBtState({ enabled: false, device: "Off" }))
   }
-  refreshBt()
-  interval(3000, refreshBt)
+  interval(8000, () => refreshBt(false))
 
   // Power Profile state & refresh
   const [powerProfile, setPowerProfile] = createState("balanced")
-  const refreshPower = () => {
+  const refreshPower = (force = false) => {
+    const win = app.get_window("notification-center")
+    if (!force && (!win || !win.visible)) return
     execAsync("powerprofilesctl get")
       .then((p) => setPowerProfile(p.trim()))
       .catch(() => {})
   }
-  refreshPower()
-  interval(4000, refreshPower)
+  interval(10000, () => refreshPower(false))
 
-  // Media Player poll
-  const mediaState = createPoll(
-    { active: false, title: "No media", artist: "Idle", status: "Stopped" },
-    1500,
-    () =>
-      execAsync("playerctl metadata --format '{{title}};;;{{artist}};;;{{status}}'")
-        .then((out) => {
-          const parts = out.trim().split(";;;")
-          if (parts.length >= 3 && parts[0]) {
-            return {
-              active: true,
-              title: parts[0],
-              artist: parts[1] || "Unknown Artist",
-              status: parts[2] || "Playing",
-            }
-          }
-          return { active: false, title: "No media playing", artist: "Idle", status: "Stopped" }
-        })
-        .catch(() => ({
+  // Media Player state & refresh
+  const [mediaState, setMediaState] = createState({
+    active: false,
+    title: "No media playing",
+    artist: "Idle",
+    status: "Stopped",
+  })
+  const refreshMedia = (force = false) => {
+    const win = app.get_window("notification-center")
+    if (!force && (!win || !win.visible)) return
+    execAsync("playerctl metadata --format '{{title}};;;{{artist}};;;{{status}}'")
+      .then((out) => {
+        const parts = out.trim().split(";;;")
+        if (parts.length >= 3 && parts[0]) {
+          setMediaState({
+            active: true,
+            title: parts[0],
+            artist: parts[1] || "Unknown Artist",
+            status: parts[2] || "Playing",
+          })
+          return
+        }
+        setMediaState({ active: false, title: "No media playing", artist: "Idle", status: "Stopped" })
+      })
+      .catch(() => {
+        setMediaState({
           active: false,
           title: "No media playing",
           artist: "Idle",
           status: "Stopped",
-        }))
-  )
+        })
+      })
+  }
+  interval(3000, () => refreshMedia(false))
+
+  let clearAllAnimated: (() => void) | null = null
 
   return (
     <window
@@ -131,9 +160,17 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
             else bd.hide()
           }
           if (self.visible) {
-            refreshWifi()
-            refreshBt()
-            refreshPower()
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+              refreshWifi(true)
+              refreshBt(true)
+              refreshPower(true)
+              refreshMedia(true)
+              audioService.sync()
+              return false
+            })
+          } else {
+            const win = self as any
+            if (win && win.set_keymode) win.set_keymode(Astal.Keymode.NONE)
           }
         })
       }}
@@ -379,99 +416,87 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
         ========================================= */}
         <box class="cc-sliders" orientation={Gtk.Orientation.VERTICAL} spacing={10}>
           {/* Volume Slider Card */}
-          <box class="cc-slider-card" spacing={12} valign={Gtk.Align.CENTER}>
-            <button
-              class="cc-slider-icon-btn"
-              onClicked={() => execAsync("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle").catch(() => {})}
-            >
-              <label
-                css="font-size: 1.25em; font-weight: 900;"
-                $={(lbl) => {
-                  const volPoll = createPoll("󰕾", 200, () =>
-                    execAsync("wpctl get-volume @DEFAULT_AUDIO_SINK@")
-                      .then((out) => {
-                        if (out.includes("MUTED")) return "󰝟"
-                        const v = parseFloat(out.split(":")[1]) || 0
-                        if (v === 0) return "󰝟"
-                        if (v < 0.33) return "󰕿"
-                        if (v < 0.66) return "󰖀"
-                        return "󰕾"
-                      })
-                      .catch(() => "󰕾")
-                  )
-                  volPoll.subscribe(() => {
-                    lbl.label = volPoll.get()
+          {(() => {
+            let iconLbl: Gtk.Label | null = null
+            let valLbl: Gtk.Label | null = null
+            let scaleAdj: Gtk.Adjustment | null = null
+            let scaleWidget: Gtk.Scale | null = null
+            let updatingFromService = false
+
+            const syncUI = (s = audioService.getState()) => {
+              if (valLbl) {
+                valLbl.label = s.isMuted ? "Muted" : `${s.volume}%`
+              }
+              if (iconLbl) {
+                iconLbl.label = s.volIcon
+              }
+              if (scaleAdj && scaleWidget) {
+                const target = s.displayVolume
+                if (Math.round(scaleWidget.get_value()) !== target) {
+                  updatingFromService = true
+                  scaleWidget.set_value(target)
+                  scaleAdj.set_value(target)
+                  updatingFromService = false
+                }
+              }
+            }
+
+            return (
+              <box class="cc-slider-card" spacing={12} valign={Gtk.Align.CENTER}>
+                <button
+                  class="cc-slider-icon-btn"
+                  onClicked={() => {
+                    audioService.toggleMute()
+                  }}
+                >
+                  <label
+                    label={audioService.getState().volIcon}
+                    css="font-size: 1.25em; font-weight: 900;"
+                    $={(lbl) => {
+                      iconLbl = lbl
+                    }}
+                  />
+                </button>
+
+                <box hexpand={true} $={(box) => {
+                  const initialVal = audioService.getDisplayVolume()
+                  const adj = new Gtk.Adjustment({ lower: 0, upper: 100, stepIncrement: 1, value: initialVal })
+                  scaleAdj = adj
+
+                  const scale = new Gtk.Scale({
+                    orientation: Gtk.Orientation.HORIZONTAL,
+                    adjustment: adj,
+                    drawValue: false,
+                    hexpand: true,
                   })
-                }}
-              />
-            </button>
+                  scaleWidget = scale
 
-            <box hexpand={true} $={(box) => {
-              const adj = new Gtk.Adjustment({ lower: 0, upper: 100, stepIncrement: 1, value: 50 })
-              const scale = new Gtk.Scale({
-                orientation: Gtk.Orientation.HORIZONTAL,
-                adjustment: adj,
-                drawValue: false,
-                hexpand: true,
-              })
-
-              let updating = false
-              let timeoutId = 0
-              scale.connect("value-changed", () => {
-                if (updating) return
-                const v = Math.round(scale.get_value())
-                if (timeoutId) GLib.source_remove(timeoutId)
-                timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 30, () => {
-                  execAsync(`wpctl set-volume @DEFAULT_AUDIO_SINK@ ${v / 100}`).catch(() => {})
-                  if (v === 0) execAsync("wpctl set-mute @DEFAULT_AUDIO_SINK@ 1").catch(() => {})
-                  else execAsync("wpctl set-mute @DEFAULT_AUDIO_SINK@ 0").catch(() => {})
-                  timeoutId = 0
-                  return false
-                })
-              })
-
-              const poll = createPoll(50, 200, () =>
-                execAsync("wpctl get-volume @DEFAULT_AUDIO_SINK@")
-                  .then((out) => {
-                    if (out.includes("MUTED")) return 0
-                    const parts = out.split(":")
-                    if (parts.length < 2) return 50
-                    const v = parseFloat(parts[1])
-                    return isNaN(v) ? 50 : Math.round(v * 100)
+                  scale.connect("value-changed", () => {
+                    if (updatingFromService) return
+                    const v = Math.round(scale.get_value())
+                    audioService.setVolume(v)
+                    if (valLbl) valLbl.label = v === 0 ? "Muted" : `${v}%`
+                    if (iconLbl) iconLbl.label = v === 0 ? "󰖁" : (v < 33 ? "󰕿" : (v < 66 ? "󰖀" : "󰕾"))
                   })
-                  .catch(() => 50)
-              )
 
-              poll.subscribe(() => {
-                if (scale.get_state_flags() & Gtk.StateFlags.ACTIVE) return
-                updating = true
-                adj.set_value(poll.get())
-                updating = false
-              })
+                  audioService.subscribe((s) => {
+                    syncUI(s)
+                  })
 
-              box.append(scale)
-            }} />
+                  box.append(scale)
+                }} />
 
-            <label
-              class="cc-slider-value"
-              css="font-size: 0.85em; font-weight: bold; min-width: 38px;"
-              $={(lbl) => {
-                const poll = createPoll("50%", 200, () =>
-                  execAsync("wpctl get-volume @DEFAULT_AUDIO_SINK@")
-                    .then((out) => {
-                      if (out.includes("MUTED")) return "Muted"
-                      const parts = out.split(":")
-                      const v = parseFloat(parts[1])
-                      return isNaN(v) ? "50%" : `${Math.round(v * 100)}%`
-                    })
-                    .catch(() => "50%")
-                )
-                poll.subscribe(() => {
-                  lbl.label = poll.get()
-                })
-              }}
-            />
-          </box>
+                <label
+                  class="cc-slider-value"
+                  label={audioService.getState().isMuted ? "Muted" : `${audioService.getState().volume}%`}
+                  css="font-size: 0.85em; font-weight: bold; min-width: 38px;"
+                  $={(lbl) => {
+                    valLbl = lbl
+                  }}
+                />
+              </box>
+            )
+          })()}
 
           {/* Brightness Slider Card */}
           {(() => {
@@ -516,12 +541,15 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
                     css="font-size: 1.25em; font-weight: 900;"
                     $={(lbl) => {
                       iconLbl = lbl
-                      execAsync("brightnessctl -m")
-                        .then((out) => {
-                          const val = parseInt(out.split(",")[3]) || 100
-                          updateVisuals(val)
-                        })
-                        .catch(() => {})
+                      const win = app.get_window("notification-center")
+                      if (win && win.visible) {
+                        execAsync("brightnessctl -m")
+                          .then((out) => {
+                            const val = parseInt(out.split(",")[3]) || 100
+                            updateVisuals(val)
+                          })
+                          .catch(() => {})
+                      }
                     }}
                   />
                 </button>
@@ -548,14 +576,16 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
                     applyBrightness(v)
                   })
 
-                  const poll = createPoll(100, 500, () =>
-                    execAsync("brightnessctl -m")
+                  const poll = createPoll(100, 1500, () => {
+                    const win = app.get_window("notification-center")
+                    if (!win || !win.visible) return Math.round(adj.get_value())
+                    return execAsync("brightnessctl -m")
                       .then((out) => {
                         const val = parseInt(out.split(",")[3])
                         return isNaN(val) ? 100 : val
                       })
                       .catch(() => 100)
-                  )
+                  })
 
                   poll.subscribe(() => {
                     if (isDragging || (scale.get_state_flags() & Gtk.StateFlags.ACTIVE)) return
@@ -565,18 +595,6 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
                     updateVisuals(cur)
                     updating = false
                   })
-
-                  execAsync("brightnessctl -m")
-                    .then((out) => {
-                      const val = parseInt(out.split(",")[3])
-                      if (!isNaN(val)) {
-                        updating = true
-                        adj.set_value(val)
-                        updateVisuals(val)
-                        updating = false
-                      }
-                    })
-                    .catch(() => {})
 
                   box.append(scale)
                 }} />
@@ -639,14 +657,31 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
             <button
               class="cc-media-btn"
               tooltipText="Previous"
-              onClicked={() => execAsync("playerctl previous").catch(() => {})}
+              onClicked={() => {
+                execAsync("playerctl previous")
+                  .then(() => {
+                    setTimeout(refreshMedia, 40)
+                    setTimeout(refreshMedia, 180)
+                  })
+                  .catch(() => {})
+              }}
             >
               <label label="󰒮" css="font-size: 1.1em;" />
             </button>
             <button
               class="cc-media-btn play-btn"
               tooltipText="Play/Pause"
-              onClicked={() => execAsync("playerctl play-pause").catch(() => {})}
+              onClicked={() => {
+                const cur = mediaState.peek()
+                const nextStatus = cur.status === "Playing" ? "Paused" : "Playing"
+                setMediaState({ ...cur, status: nextStatus })
+                execAsync("playerctl play-pause")
+                  .then(() => {
+                    setTimeout(refreshMedia, 50)
+                    setTimeout(refreshMedia, 220)
+                  })
+                  .catch(() => refreshMedia())
+              }}
             >
               <label
                 label={mediaState((m) => (m.status === "Playing" ? "󰏤" : "󰐊"))}
@@ -656,7 +691,14 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
             <button
               class="cc-media-btn"
               tooltipText="Next"
-              onClicked={() => execAsync("playerctl next").catch(() => {})}
+              onClicked={() => {
+                execAsync("playerctl next")
+                  .then(() => {
+                    setTimeout(refreshMedia, 40)
+                    setTimeout(refreshMedia, 180)
+                  })
+                  .catch(() => {})
+              }}
             >
               <label label="󰒭" css="font-size: 1.1em;" />
             </button>
@@ -683,7 +725,10 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
           <button
             class="notif-clear-btn"
             visible={notifService.notifications((ns) => ns.length > 0)}
-            onClicked={() => notifService.clearAll()}
+            onClicked={() => {
+              if (clearAllAnimated) clearAllAnimated()
+              else notifService.clearAll()
+            }}
           >
             <box spacing={4} valign={Gtk.Align.CENTER}>
               <label label="󰎟" css="font-size: 0.9em;" />
@@ -705,7 +750,49 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
             orientation={Gtk.Orientation.VERTICAL}
             spacing={8}
             $={(listBox) => {
+              type DismissFn = (isBatch?: boolean) => void
+              const cardDismissers = new Map<number, DismissFn>()
+              let isClearing = false
+
+              clearAllAnimated = () => {
+                if (isClearing) return
+                isClearing = true
+
+                const entries = Array.from(cardDismissers.entries())
+                if (entries.length === 0) {
+                  isClearing = false
+                  notifService.clearAll()
+                  return
+                }
+
+                // Stagger dismissals by 70ms each
+                entries.forEach(([id, dismissFn], idx) => {
+                  GLib.timeout_add(GLib.PRIORITY_DEFAULT, idx * 70, () => {
+                    dismissFn(true)
+                    return false
+                  })
+                })
+
+                // Once all animations finish, clear store once
+                const totalDelay = (entries.length - 1) * 70 + 320
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, totalDelay, () => {
+                  isClearing = false
+                  notifService.clearAll()
+                  return false
+                })
+              }
+
+              activeClearAll = clearAllAnimated
+              activeDismissFirst = () => {
+                const first = cardDismissers.values().next().value
+                if (first) first(false)
+              }
+
               const render = (items: NotificationItem[]) => {
+                if (isClearing) return
+
+                cardDismissers.clear()
+
                 while (listBox.get_first_child()) {
                   listBox.remove(listBox.get_first_child()!)
                 }
@@ -740,11 +827,38 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
                 }
 
                 items.forEach((item) => {
+                  const revealer = new Gtk.Revealer({
+                    transition_type: Gtk.RevealerTransitionType.SLIDE_UP,
+                    transition_duration: 220,
+                    reveal_child: true,
+                  })
+
                   const card = new Gtk.Box({
                     orientation: Gtk.Orientation.VERTICAL,
                     spacing: 6,
                     cssClasses: ["notification-card"],
                   })
+                  card.set_cursor_from_name("pointer")
+
+                  let isDismissed = false
+                  let isReplying = false
+                  let preventActivation = false
+
+                  // Left-click on card activates the corresponding app
+                  const cardClick = new Gtk.GestureClick()
+                  cardClick.connect("released", () => {
+                    if (preventActivation || isReplying || isDismissed) {
+                      preventActivation = false
+                      return
+                    }
+                    if (cardClick.get_current_button() === Gdk.BUTTON_PRIMARY) {
+                      notifService.activateNotification(item.id, item.appName, item.desktopEntry)
+                      const w = app.get_window("notification-center")
+                      if (w) w.hide()
+                    }
+                  })
+                  card.add_controller(cardClick)
+
                   if (item.urgency === 2) card.add_css_class("critical")
 
                   // Top row
@@ -775,8 +889,35 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
                     cssClasses: ["notif-card-close"],
                     child: new Gtk.Label({ label: "󰅖" }),
                   })
+                  const closePress = new Gtk.GestureClick()
+                  closePress.connect("pressed", () => {
+                    preventActivation = true
+                  })
+                  closeBtn.add_controller(closePress)
+
+                  const dismissThisCard: DismissFn = (isBatch = false) => {
+                    if (isDismissed) return
+                    isDismissed = true
+
+                    card.add_css_class("dismissing")
+
+                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 90, () => {
+                      revealer.set_reveal_child(false)
+                      return false
+                    })
+
+                    if (!isBatch) {
+                      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 290, () => {
+                        notifService.dismiss(item.id)
+                        return false
+                      })
+                    }
+                  }
+
+                  cardDismissers.set(item.id, dismissThisCard)
+
                   closeBtn.connect("clicked", () => {
-                    notifService.dismiss(item.id)
+                    dismissThisCard(false)
                   })
                   topRow.append(closeBtn)
 
@@ -806,7 +947,142 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
                     card.append(bodyLbl)
                   }
 
-                  listBox.append(card)
+                  // Image attachment
+                  if (item.image && GLib.file_test(item.image, GLib.FileTest.EXISTS)) {
+                    const imgPic = Gtk.Picture.new_for_filename(item.image)
+                    imgPic.can_shrink = true
+                    imgPic.add_css_class("notif-card-image")
+                    card.append(imgPic)
+                  }
+
+                  // Action Buttons & Inline Reply
+                  if (item.actions && item.actions.length > 0) {
+                    const sortedActions = [...item.actions].sort((a, b) => {
+                      if (a.label === "Reply") return 1
+                      if (b.label === "Reply") return -1
+                      return 0
+                    })
+                    const hasSingleReply = sortedActions.length === 1 && sortedActions[0].label === "Reply"
+
+                    const actionsBox = new Gtk.Box({
+                      orientation: Gtk.Orientation.HORIZONTAL,
+                      spacing: 8,
+                      homogeneous: !hasSingleReply,
+                      hexpand: true,
+                      halign: hasSingleReply ? Gtk.Align.END : Gtk.Align.FILL,
+                      cssClasses: ["notif-card-actions"],
+                      marginTop: 6,
+                    })
+
+                    const replyRevealer = new Gtk.Revealer({
+                      transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN,
+                      transition_duration: 180,
+                      reveal_child: false,
+                      hexpand: true,
+                    })
+
+                    const replyBox = new Gtk.Box({
+                      orientation: Gtk.Orientation.HORIZONTAL,
+                      spacing: 6,
+                      hexpand: true,
+                      cssClasses: ["notif-card-reply-box"],
+                      marginTop: 4,
+                    })
+
+                    const replyEntry = new Gtk.Entry({
+                      placeholderText: "Type a reply...",
+                      hexpand: true,
+                      cssClasses: ["notif-card-reply-entry"],
+                    })
+
+                    const sendBtn = new Gtk.Button({
+                      cssClasses: ["notif-card-send-btn"],
+                      valign: Gtk.Align.CENTER,
+                      halign: Gtk.Align.CENTER,
+                      child: new Gtk.Label({
+                        label: "Send",
+                        halign: Gtk.Align.CENTER,
+                        valign: Gtk.Align.CENTER,
+                      }),
+                    })
+
+                    const doSend = () => {
+                      const text = replyEntry.get_text().trim()
+                      if (text.length > 0) {
+                        notifService.sendReply(item.id, text)
+                        dismissThisCard(false)
+                        const w = app.get_window("notification-center") as any
+                        if (w && w.set_keymode) w.set_keymode(Astal.Keymode.NONE)
+                      }
+                    }
+
+                    replyEntry.connect("activate", doSend)
+                    sendBtn.connect("clicked", doSend)
+
+                    const entryKeyCtrl = new Gtk.EventControllerKey()
+                    entryKeyCtrl.connect("key-pressed", (_, keyval) => {
+                      if (keyval === 65307 || keyval === Gdk.KEY_Escape) {
+                        isReplying = false
+                        replyRevealer.set_reveal_child(false)
+                        actionsBox.show()
+                        const w = app.get_window("notification-center") as any
+                        if (w && w.set_keymode) w.set_keymode(Astal.Keymode.NONE)
+                        return true
+                      }
+                      return false
+                    })
+                    replyEntry.add_controller(entryKeyCtrl)
+
+                    const replyPress = new Gtk.GestureClick()
+                    replyPress.connect("pressed", () => {
+                      preventActivation = true
+                    })
+                    replyBox.add_controller(replyPress)
+
+                    replyBox.append(replyEntry)
+                    replyBox.append(sendBtn)
+                    replyRevealer.set_child(replyBox)
+
+                    sortedActions.forEach((act) => {
+                      const actBtn = new Gtk.Button({
+                        cssClasses: ["notif-card-action-btn"],
+                        label: act.label,
+                        hexpand: !hasSingleReply,
+                      })
+                      const actPress = new Gtk.GestureClick()
+                      actPress.connect("pressed", () => {
+                        preventActivation = true
+                      })
+                      actBtn.add_controller(actPress)
+
+                      if (act.label === "Reply") {
+                        actBtn.add_css_class("primary")
+                        actBtn.connect("clicked", () => {
+                          isReplying = true
+                          const w = app.get_window("notification-center") as any
+                          if (w && w.set_keymode) w.set_keymode(Astal.Keymode.ON_DEMAND)
+                          actionsBox.hide()
+                          replyRevealer.set_reveal_child(true)
+                          GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => {
+                            replyEntry.grab_focus()
+                            return false
+                          })
+                        })
+                      } else {
+                        actBtn.connect("clicked", () => {
+                          notifService.invokeAction(item.id, act.id)
+                          dismissThisCard(false)
+                        })
+                      }
+                      actionsBox.append(actBtn)
+                    })
+
+                    card.append(actionsBox)
+                    card.append(replyRevealer)
+                  }
+
+                  revealer.set_child(card)
+                  listBox.append(revealer)
                 })
               }
 
@@ -833,7 +1109,7 @@ export function NotificationCenterBackdrop(gdkmonitor: Gdk.Monitor) {
       keymode={Astal.Keymode.NONE}
       layer={Astal.Layer.TOP}
       anchor={TOP | BOTTOM | LEFT | RIGHT}
-      margin-top={44}
+      margin-top={46}
       application={app}
       $={(self) => {
         const click = new Gtk.GestureClick()

@@ -17,7 +17,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
   const { BOTTOM } = Astal.WindowAnchor
 
   // Poll running clients
-  const clients = createPoll([], 500, () => {
+  const clients = createPoll([], 1200, () => {
     return execAsync("hyprctl clients -j").then(out => {
       const parsed = JSON.parse(out)
       // Group by class to avoid multiple icons for same app (or keep them separate depending on preference)

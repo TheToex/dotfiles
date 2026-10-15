@@ -2,6 +2,7 @@ import app from "ags/gtk4/app"
 import { Astal, Gtk, Gdk } from "ags/gtk4"
 import { createPoll } from "ags/time"
 import { execAsync } from "ags/process"
+import GLib from "gi://GLib"
 
 interface WifiNetwork {
   ssid: string;
@@ -9,6 +10,55 @@ interface WifiNetwork {
   security: string;
   active: boolean;
 }
+
+let cachedWifiNetworks: WifiNetwork[] = []
+let renderNetworksRef: ((networks: WifiNetwork[]) => void) | null = null
+let updateToggleRef: (() => void) | null = null
+
+const parseWifiOutput = (out: string): WifiNetwork[] => {
+  const networks: WifiNetwork[] = []
+  const seen = new Set<string>()
+  out.split("\n").forEach(line => {
+    if (!line.trim()) return
+    const parts = line.split(":")
+    let ssid = parts[0]
+    let signal = parseInt(parts[1])
+    let active = parts[3] === "yes"
+    
+    if (parts.length > 4) {
+       active = parts[parts.length - 1] === "yes"
+       signal = parseInt(parts[parts.length - 3])
+       ssid = parts.slice(0, parts.length - 3).join(":")
+    }
+
+    if (!ssid || seen.has(ssid)) return
+    seen.add(ssid)
+    networks.push({ ssid, signal: isNaN(signal) ? 50 : signal, security: "", active })
+  })
+  
+  return networks.sort((a, b) => {
+    if (a.active) return -1
+    if (b.active) return 1
+    return b.signal - a.signal
+  })
+}
+
+const queryWifiNetworks = (rescan = false): Promise<WifiNetwork[]> => {
+  return execAsync(`nmcli -t -f SSID,SIGNAL,SECURITY,ACTIVE dev wifi list --rescan ${rescan ? "yes" : "no"}`)
+    .then(out => {
+      cachedWifiNetworks = parseWifiOutput(out)
+      return cachedWifiNetworks
+    })
+    .catch(() => cachedWifiNetworks)
+}
+
+// Pre-fetch synchronously on module load for instant 0ms availability
+try {
+  const [res, out] = GLib.spawn_command_line_sync("nmcli -t -f SSID,SIGNAL,SECURITY,ACTIVE dev wifi list --rescan no")
+  if (res && out) {
+    cachedWifiNetworks = parseWifiOutput(new TextDecoder().decode(out))
+  }
+} catch (_) {}
 
 const getWifiIcon = (signal: number) => {
   return ""
@@ -33,10 +83,36 @@ export default function WifiMenu(gdkmonitor: Gdk.Monitor) {
         const ctrl = new Gtk.EventControllerKey()
         ctrl.connect("key-pressed", (_, keyval) => {
           if (keyval === 65307) { // Escape
-            const w = app.get_window("wifi-menu"); if(w) w.visible = false;
+            self.visible = false
+            return true
           }
+          return false
         })
         self.add_controller(ctrl)
+
+        self.connect("notify::visible", () => {
+          if (self.visible) {
+            if (updateToggleRef) updateToggleRef()
+            if (renderNetworksRef && cachedWifiNetworks.length > 0) {
+              renderNetworksRef(cachedWifiNetworks)
+            }
+            queryWifiNetworks(false).then(networks => {
+              if (renderNetworksRef) renderNetworksRef(networks)
+            }).catch(() => {})
+
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
+              if (self.visible) {
+                execAsync("nmcli dev wifi rescan")
+                  .then(() => queryWifiNetworks(false))
+                  .then(networks => {
+                    if (self.visible && renderNetworksRef) renderNetworksRef(networks)
+                  })
+                  .catch(() => {})
+              }
+              return false
+            })
+          }
+        })
       }}
     >
       <box orientation={Gtk.Orientation.VERTICAL}>
@@ -74,9 +150,9 @@ export default function WifiMenu(gdkmonitor: Gdk.Monitor) {
                    const setVisualState = (on) => {
                        currentState = on;
                        btn.label = on ? "" : "";
-                       // Green when ON, Grey when OFF
-                       if (on) btn.css_classes = ["wifi-toggle-btn", "active"];
-                       else btn.css_classes = ["wifi-toggle-btn"];
+                       btn.add_css_class("wifi-toggle-btn");
+                       if (on) btn.add_css_class("active");
+                       else btn.remove_css_class("active");
                    };
 
                    const update = () => {
@@ -86,6 +162,7 @@ export default function WifiMenu(gdkmonitor: Gdk.Monitor) {
                      }).catch(() => {});
                    };
                    update();
+                   updateToggleRef = update;
                    
                    btn.connect("clicked", () => {
                        // Optimistic UI update (instant)
@@ -100,9 +177,11 @@ export default function WifiMenu(gdkmonitor: Gdk.Monitor) {
                    });
                    
                    // Background poll to stay in sync
-                   const GLib = imports.gi.GLib;
                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
-                       update();
+                       const win = app.get_window("wifi-menu");
+                       if (win && win.visible) {
+                           update();
+                       }
                        return true;
                    });
                 }}
@@ -175,49 +254,30 @@ export default function WifiMenu(gdkmonitor: Gdk.Monitor) {
                     })
                   }
 
-                  fetchWifi = () => {
-                    execAsync("nmcli -t -f SSID,SIGNAL,SECURITY,ACTIVE dev wifi list").then(out => {
-                      const networks: WifiNetwork[] = []
-                      const seen = new Set<string>()
-                      out.split("\n").forEach(line => {
-                        if (!line.trim()) return
-                        const parts = line.split(":")
-                        let ssid = parts[0]
-                        let signal = parseInt(parts[1])
-                        let active = parts[3] === "yes"
-                        
-                        if (parts.length > 4) {
-                           active = parts[parts.length - 1] === "yes"
-                           signal = parseInt(parts[parts.length - 3])
-                           ssid = parts.slice(0, parts.length - 3).join(":")
-                        }
+                  renderNetworksRef = renderNetworks
 
-                        if (!ssid || seen.has(ssid)) return
-                        seen.add(ssid)
-                        networks.push({ ssid, signal, security: "", active })
-                      })
-                      
-                      const sorted = networks.sort((a, b) => b.signal - a.signal)
-                      renderNetworks(sorted)
+                  // Render cached networks immediately (0ms delay)
+                  if (cachedWifiNetworks.length > 0) {
+                    renderNetworks(cachedWifiNetworks)
+                  }
+
+                  fetchWifi = (force = false) => {
+                    const win = app.get_window("wifi-menu")
+                    if (!force && (!win || !win.visible)) return
+
+                    queryWifiNetworks(false).then(networks => {
+                      renderNetworks(networks)
                     }).catch(e => print(e))
                   }
 
-                  // Initial fetch
-                  fetchWifi()
-
-                  // Poll every 3 seconds
-                  setInterval(fetchWifi, 3000)
-
-                  // Fetch immediately on open & request rescan
-                  const win = app.get_window("wifi-menu")
-                  if (win) {
-                    win.connect("notify::visible", () => {
-                      if (win.visible) {
-                        execAsync("nmcli dev wifi rescan").catch(() => {})
-                        fetchWifi()
-                      }
-                    })
-                  }
+                  // Poll every 5 seconds only if menu is open
+                  GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 5, () => {
+                    const win = app.get_window("wifi-menu")
+                    if (win && win.visible) {
+                      fetchWifi(false)
+                    }
+                    return true
+                  })
                 }}
               />
             </Gtk.ScrolledWindow>

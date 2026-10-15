@@ -4,10 +4,11 @@ import { Astal, Gtk, Gdk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import { createPoll } from "ags/time"
 import { notifService } from "../service/notifications"
+import { audioService } from "../service/audio"
 import Tray from "gi://AstalTray"
 
 function Workspaces() {
-  const workspaces = createPoll([1, 2, 3, 4], 100, () => {
+  const workspaces = createPoll([1, 2, 3, 4], 300, () => {
     return execAsync("hyprctl workspaces -j").then(out => {
       const parsed = JSON.parse(out)
       let ids = parsed.map((w: any) => w.id).filter((id: number) => id > 0)
@@ -20,7 +21,7 @@ function Workspaces() {
     }).catch(() => [1, 2, 3, 4])
   })
 
-  const active = createPoll(1, 100, () => {
+  const active = createPoll(1, 200, () => {
     return execAsync("hyprctl activeworkspace -j").then(out => {
       return JSON.parse(out).id
     }).catch(() => 1)
@@ -98,12 +99,12 @@ function SysTray() {
             const btn = new Gtk.MenuButton({
               valign: Gtk.Align.CENTER,
               halign: Gtk.Align.CENTER,
-              tooltipMarkup: item.tooltip_markup || item.title || "",
+              hasTooltip: false,
               hasFrame: false,
               menuModel: item.menu_model,
             })
 
-            const img = new Gtk.Image({ pixelSize: 16 })
+            const img = new Gtk.Image({ pixelSize: 16, hasTooltip: false })
             if (item.gicon) {
               img.gicon = item.gicon
             } else if (item.icon_name) {
@@ -160,23 +161,38 @@ function SysTray() {
   )
 }
 
+function toggleMenu(targetName: string) {
+  const menuNames = [
+    "wifi-menu",
+    "bluetooth-menu",
+    "audio-menu",
+    "power-menu",
+    "battery-menu",
+    "date-menu",
+    "notification-center",
+  ]
+  const target = app.get_window(targetName)
+  if (!target) return
+
+  if (target.visible) {
+    target.hide()
+    return
+  }
+
+  for (const name of menuNames) {
+    if (name !== targetName) {
+      const w = app.get_window(name)
+      if (w && w.visible) {
+        w.hide()
+      }
+    }
+  }
+
+  target.show()
+}
+
 function SysInfo() {
-  const volIcon = createPoll("󰕾", 100, () => 
-    execAsync("wpctl get-volume @DEFAULT_AUDIO_SINK@").then(out => {
-      if (out.includes("MUTED")) return "󰖁"
-      const v = parseFloat(out.split(":")[1]) * 100
-      if (v === 0) return "󰖁"
-      if (v < 33) return "󰕿"
-      if (v < 66) return "󰖀"
-      return "󰕾"
-    }).catch(() => "󰕾")
-  )
-
-  const battery = createPoll("100%", 5000, () => 
-    execAsync("cat /sys/class/power_supply/BAT0/capacity").then(c => c.trim() + "%").catch(() => "100%")
-  )
-
-  const wifiIcon = createPoll("", 1000, () => {
+  const wifiIcon = createPoll("", 4000, () => {
     return execAsync("nmcli radio wifi").then(radio => {
         if (radio.trim() !== "enabled") return "󰤭"; // Empty dot, no slash
         
@@ -188,7 +204,7 @@ function SysInfo() {
     }).catch(() => "󰤭");
   })
 
-  const btIcon = createPoll("󰂯", 2000, () => {
+  const btIcon = createPoll("󰂯", 5000, () => {
     return execAsync("bluetoothctl show").then(out => {
         if (out.includes("Powered: yes")) return "󰂯";
         return "󰂲";
@@ -204,19 +220,7 @@ function SysInfo() {
         {/* Bluetooth Button */}
         <button 
           valign={Gtk.Align.CENTER} 
-          onClicked={() => {
-            const win = app.get_window("bluetooth-menu")
-            if (win && win.visible) {
-              win.hide();
-            } else {
-              const w = app.get_window("wifi-menu"); if(w) w.hide(); const bt = app.get_window("bluetooth-menu"); if(bt) bt.hide();
-              const a = app.get_window("audio-menu"); if(a) a.hide();
-              const p = app.get_window("power-menu"); if(p) p.hide();
-              const b = app.get_window("battery-menu"); if(b) b.hide();
-              const nc = app.get_window("notification-center"); if(nc) nc.hide();
-              if(win) win.show();
-            }
-          }}
+          onClicked={() => toggleMenu("bluetooth-menu")}
           $={(btn) => {
             const win = app.get_window("bluetooth-menu")
             if (win) {
@@ -237,19 +241,7 @@ function SysInfo() {
         {/* Wifi Button */}
         <button 
           valign={Gtk.Align.CENTER} 
-          onClicked={() => {
-            const win = app.get_window("wifi-menu")
-            if (win && win.visible) {
-              win.hide();
-            } else {
-              const a = app.get_window("audio-menu"); if(a) a.hide();
-              const p = app.get_window("power-menu"); if(p) p.hide();
-              const b = app.get_window("battery-menu"); if(b) b.hide();
-              const bt = app.get_window("bluetooth-menu"); if(bt) bt.hide();
-              const nc = app.get_window("notification-center"); if(nc) nc.hide();
-              if(win) win.show();
-            }
-          }}
+          onClicked={() => toggleMenu("wifi-menu")}
           $={(btn) => {
             const win = app.get_window("wifi-menu")
             if (win) {
@@ -270,18 +262,7 @@ function SysInfo() {
         {/* Audio Button */}
         <button 
           valign={Gtk.Align.CENTER} 
-          onClicked={() => {
-            const win = app.get_window("audio-menu")
-            if (win && win.visible) {
-              win.hide();
-            } else {
-              const w = app.get_window("wifi-menu"); if(w) w.hide(); const bt = app.get_window("bluetooth-menu"); if(bt) bt.hide();
-              const p = app.get_window("power-menu"); if(p) p.hide();
-              const b = app.get_window("battery-menu"); if(b) b.hide();
-              const nc = app.get_window("notification-center"); if(nc) nc.hide();
-              if(win) win.show();
-            }
-          }}
+          onClicked={() => toggleMenu("audio-menu")}
           $={(btn) => {
             const win = app.get_window("audio-menu")
             if (win) {
@@ -296,7 +277,17 @@ function SysInfo() {
             }
           }}
         >
-          <label label={volIcon} halign={Gtk.Align.CENTER} valign={Gtk.Align.CENTER} css="font-size: 1.15em;" />
+          <label 
+            label={audioService.getState().volIcon} 
+            halign={Gtk.Align.CENTER} 
+            valign={Gtk.Align.CENTER} 
+            css="font-size: 1.15em;" 
+            $={(lbl) => {
+              audioService.subscribe((s) => {
+                lbl.set_label(s.volIcon)
+              })
+            }}
+          />
         </button>
       </box>
 
@@ -304,20 +295,7 @@ function SysInfo() {
       <button 
         class="pill notif-bell" 
         valign={Gtk.Align.CENTER}
-        onClicked={() => {
-          const win = app.get_window("notification-center")
-          if (win && win.visible) {
-            win.hide()
-          } else {
-            const w = app.get_window("wifi-menu"); if(w) w.hide();
-            const bt = app.get_window("bluetooth-menu"); if(bt) bt.hide();
-            const a = app.get_window("audio-menu"); if(a) a.hide();
-            const p = app.get_window("power-menu"); if(p) p.hide();
-            const b = app.get_window("battery-menu"); if(b) b.hide();
-            const d = app.get_window("date-menu"); if(d) d.hide();
-            if (win) win.show()
-          }
-        }}
+        onClicked={() => toggleMenu("notification-center")}
         $={(btn) => {
           let hasNewUnread = false
           let lastKnownNotifIds = new Set(notifService.notifications().map((n: any) => n.id))
@@ -376,18 +354,7 @@ function SysInfo() {
       {/* Battery */}
       <button 
         valign={Gtk.Align.CENTER}
-        onClicked={() => {
-          const win = app.get_window("battery-menu")
-          if (win && win.visible) {
-            win.hide();
-          } else {
-            const w = app.get_window("wifi-menu"); if(w) w.hide(); const bt = app.get_window("bluetooth-menu"); if(bt) bt.hide();
-            const a = app.get_window("audio-menu"); if(a) a.hide();
-            const p = app.get_window("power-menu"); if(p) p.hide();
-            const nc = app.get_window("notification-center"); if(nc) nc.hide();
-            if(win) win.show();
-          }
-        }}
+        onClicked={() => toggleMenu("battery-menu")}
         $={(btn) => {
            const win = app.get_window("battery-menu")
            if (win) {
@@ -443,18 +410,7 @@ function SysInfo() {
       <button 
         class="power-pill" 
         valign={Gtk.Align.CENTER}
-        onClicked={() => {
-          const win = app.get_window("power-menu")
-          if (win && win.visible) {
-            win.hide();
-          } else {
-            const w = app.get_window("wifi-menu"); if(w) w.hide(); const bt = app.get_window("bluetooth-menu"); if(bt) bt.hide();
-            const a = app.get_window("audio-menu"); if(a) a.hide();
-            const b = app.get_window("battery-menu"); if(b) b.hide();
-            const nc = app.get_window("notification-center"); if(nc) nc.hide();
-            if(win) win.show();
-          }
-        }}
+        onClicked={() => toggleMenu("power-menu")}
         $={(btn) => {
           const win = app.get_window("power-menu")
           if (win) {
@@ -479,7 +435,10 @@ function SysInfo() {
 }
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
-  const time = createPoll("", 1000, "date '+%H:%M'")
+  const time = createPoll("", 1000, () => {
+    const d = new Date()
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+  })
   const { TOP, LEFT, RIGHT } = Astal.WindowAnchor
 
   return (
@@ -506,20 +465,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           <button 
             class="pill" 
             valign={Gtk.Align.CENTER}
-            onClicked={() => {
-              const win = app.get_window("date-menu")
-              if (win && win.visible) {
-                win.hide()
-              } else {
-                const w = app.get_window("wifi-menu"); if (w) w.hide()
-                const bt = app.get_window("bluetooth-menu"); if (bt) bt.hide()
-                const a = app.get_window("audio-menu"); if (a) a.hide()
-                const p = app.get_window("power-menu"); if (p) p.hide()
-                const b = app.get_window("battery-menu"); if (b) b.hide()
-                const nc = app.get_window("notification-center"); if (nc) nc.hide()
-                if (win) win.show()
-              }
-            }}
+            onClicked={() => toggleMenu("date-menu")}
             $={(btn) => {
               const win = app.get_window("date-menu")
               if (win) {

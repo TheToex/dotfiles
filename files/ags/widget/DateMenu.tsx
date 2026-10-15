@@ -5,8 +5,16 @@ import { createPoll } from "ags/time"
 export default function DateMenu(gdkmonitor: Gdk.Monitor) {
   const { TOP, RIGHT, BOTTOM, LEFT } = Astal.WindowAnchor
 
-  const time = createPoll("", 1000, "date '+%H:%M'")
-  const fullDate = createPoll("", 1000, "date '+%A, %d %B %Y'")
+  const getTime = () => {
+    const d = new Date()
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+  }
+  const getDate = () => {
+    const d = new Date()
+    return d.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+  }
+  const time = createPoll(getTime(), 1000, () => getTime())
+  const fullDate = createPoll(getDate(), 5000, () => getDate())
 
   return (
     <window

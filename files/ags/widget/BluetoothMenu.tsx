@@ -1,12 +1,51 @@
 import app from "ags/gtk4/app"
 import { Astal, Gtk, Gdk } from "ags/gtk4"
 import { execAsync } from "ags/process"
+import GLib from "gi://GLib"
 
 interface BluetoothDevice {
   mac: string
   name: string
   connected: boolean
 }
+
+let cachedDevices: BluetoothDevice[] = []
+let cachedBtPower = false
+let updateBtPowerVisual: ((on: boolean) => void) | null = null
+let renderDevicesRef: ((devs: BluetoothDevice[]) => void) | null = null
+
+const queryDevices = (): Promise<BluetoothDevice[]> => {
+  return Promise.all([
+    execAsync("bluetoothctl devices").catch(() => ""),
+    execAsync("bluetoothctl devices Connected").catch(() => "")
+  ]).then(([allOut, connectedOut]) => {
+    const connectedMacs = new Set(
+      connectedOut.split("\n")
+        .filter(l => l.startsWith("Device "))
+        .map(l => l.split(" ")[1])
+    )
+    
+    const devices: BluetoothDevice[] = []
+    allOut.split("\n").forEach(line => {
+      if (!line.startsWith("Device ")) return
+      const parts = line.split(" ")
+      const mac = parts[1]
+      const name = parts.slice(2).join(" ")
+      devices.push({ mac, name, connected: connectedMacs.has(mac) })
+    })
+    
+    cachedDevices = devices.sort((a, b) => (a.connected === b.connected ? 0 : a.connected ? -1 : 1))
+    if (renderDevicesRef) renderDevicesRef(cachedDevices)
+    return cachedDevices
+  })
+}
+
+// Pre-fetch immediately on startup
+queryDevices().catch(() => {})
+execAsync("bluetoothctl show").then(out => {
+  cachedBtPower = out.includes("Powered: yes")
+  if (updateBtPowerVisual) updateBtPowerVisual(cachedBtPower)
+}).catch(() => {})
 
 export default function BluetoothMenu(gdkmonitor: Gdk.Monitor) {
   const { TOP, RIGHT, BOTTOM, LEFT } = Astal.WindowAnchor
@@ -33,6 +72,15 @@ export default function BluetoothMenu(gdkmonitor: Gdk.Monitor) {
           return false;
         })
         self.add_controller(ctrl)
+
+        self.connect("notify::visible", () => {
+          if (self.visible) {
+            if (updateBtPowerVisual) updateBtPowerVisual(cachedBtPower)
+            if (renderDevicesRef && cachedDevices.length > 0) {
+              renderDevicesRef(cachedDevices)
+            }
+          }
+        })
       }}
     >
       <box orientation={Gtk.Orientation.VERTICAL}>
@@ -63,18 +111,22 @@ export default function BluetoothMenu(gdkmonitor: Gdk.Monitor) {
               <button 
                 css="background: transparent; border: none; box-shadow: none; font-size: 1.8em; padding: 0; margin-right: 12px;"
                 $={(btn) => {
-                   let currentState = false;
+                   let currentState = cachedBtPower;
                    
-                   const setVisualState = (on) => {
+                   const setVisualState = (on: boolean) => {
                        currentState = on;
                        btn.label = on ? "" : "";
-                       if (on) btn.css_classes = ["wifi-toggle-btn", "active"];
-                       else btn.css_classes = ["wifi-toggle-btn"];
+                       btn.add_css_class("wifi-toggle-btn");
+                       if (on) btn.add_css_class("active");
+                       else btn.remove_css_class("active");
                    };
+                   updateBtPowerVisual = setVisualState;
+                   setVisualState(cachedBtPower);
 
                    const update = () => {
                      execAsync("bluetoothctl show").then(out => {
                          const on = out.includes("Powered: yes");
+                         cachedBtPower = on;
                          setVisualState(on);
                      }).catch(() => {});
                    };
@@ -88,9 +140,11 @@ export default function BluetoothMenu(gdkmonitor: Gdk.Monitor) {
                        });
                    });
                    
-                   const GLib = imports.gi.GLib;
                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
-                       update();
+                       const win = app.get_window("bluetooth-menu");
+                       if (win && win.visible) {
+                           update();
+                       }
                        return true;
                    });
                 }}
@@ -102,7 +156,7 @@ export default function BluetoothMenu(gdkmonitor: Gdk.Monitor) {
                 orientation={Gtk.Orientation.VERTICAL} 
                 spacing={12}
                 $={(box) => {
-                  let fetchDevices: () => void;
+                  let fetchDevices: (force?: boolean) => void;
                   
                   const renderDevices = (devices: BluetoothDevice[]) => {
                     while (box.get_first_child()) box.remove(box.get_first_child()!)
@@ -163,38 +217,33 @@ export default function BluetoothMenu(gdkmonitor: Gdk.Monitor) {
                     })
                   }
 
-                  fetchDevices = () => {
-                    Promise.all([
-                      execAsync("bluetoothctl devices").catch(() => ""),
-                      execAsync("bluetoothctl devices Connected").catch(() => "")
-                    ]).then(([allOut, connectedOut]) => {
-                      const connectedMacs = new Set(
-                        connectedOut.split("\n")
-                          .filter(l => l.startsWith("Device "))
-                          .map(l => l.split(" ")[1])
-                      )
-                      
-                      const devices: BluetoothDevice[] = []
-                      allOut.split("\n").forEach(line => {
-                        if (!line.startsWith("Device ")) return
-                        const parts = line.split(" ")
-                        const mac = parts[1]
-                        const name = parts.slice(2).join(" ")
-                        devices.push({ mac, name, connected: connectedMacs.has(mac) })
-                      })
-                      
-                      renderDevices(devices.sort((a, b) => (a.connected === b.connected ? 0 : a.connected ? -1 : 1)))
-                    })
+                  renderDevicesRef = renderDevices;
+
+                  // Render cached devices immediately (0ms delay)
+                  if (cachedDevices.length > 0) {
+                    renderDevices(cachedDevices)
                   }
 
-                  fetchDevices()
-                  setInterval(fetchDevices, 3000)
+                  fetchDevices = (force = false) => {
+                    const win = app.get_window("bluetooth-menu")
+                    if (!force && (!win || !win.visible)) return
+
+                    queryDevices().then(devs => {
+                      renderDevices(devs)
+                    }).catch(e => print(e))
+                  }
+
+                  // Poll only when menu is open
+                  setInterval(() => fetchDevices(false), 4000)
 
                   const win = app.get_window("bluetooth-menu")
                   if (win) {
                     win.connect("notify::visible", () => {
                       if (win.visible) {
-                        fetchDevices()
+                        if (cachedDevices.length > 0) {
+                          renderDevices(cachedDevices)
+                        }
+                        fetchDevices(true)
                       }
                     })
                   }
