@@ -59,6 +59,7 @@ function getAppIconWidget(appName: string, appIcon: string): Gtk.Widget {
     vlc: "vlc",
     terminal: "utilities-terminal",
     system: "preferences-system-notifications",
+    hyprconnect: "hyprconnect",
   }
 
   for (const [key, iconName] of Object.entries(appMap)) {

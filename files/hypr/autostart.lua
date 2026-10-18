@@ -17,7 +17,8 @@ hl.on("hyprland.start", function()
     
     -- اجرای برنامه قفل صفحه و خواب (idle)
     exec("hypridle")
-    
+    -- احرای deamon برنامه hyprconnect
+    exec("~/.local/bin/hyprconnect daemon") 
     -- اجرای اسکریپت اعمال تم (در پس‌زمینه)
     -- exec("~/.config/hypr/themes/current/apply.sh")
 
